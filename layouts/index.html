@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12344b">
+  <meta name="description" content="{{ site.Params.description }}">
+  <title>{{ site.Title }}</title>
+  <link rel="manifest" href="{{ "manifest.webmanifest" | relURL }}">
+  <link rel="icon" href="{{ "icon.svg" | relURL }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ "css/app.css" | relURL }}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to alert desk</a>
+
+  <header class="site-header">
+    <div class="brand-mark" aria-hidden="true">VW</div>
+    <div>
+      <p class="eyebrow">Van Wert County Emergency Management</p>
+      <h1>Weather Alert Desk</h1>
+    </div>
+    <div class="header-actions">
+      <button id="install-app" class="button secondary hidden" type="button">Install app</button>
+      <button id="start-incident" class="button primary" type="button">Start incident</button>
+      <button id="complete-incident" class="button secondary hidden" type="button">Complete incident</button>
+      <button id="report-button" class="button secondary" type="button" disabled>Report / Print</button>
+    </div>
+  </header>
+
+  <main id="main" class="app-shell">
+    <section class="status-strip" aria-label="NWS connection status">
+      <div class="status-main">
+        <span id="feed-dot" class="status-dot checking" aria-hidden="true"></span>
+        <div>
+          <strong id="feed-status">Checking NWS feed…</strong>
+          <span id="last-checked">Van Wert County · OHC161</span>
+        </div>
+      </div>
+      <div class="status-actions">
+        <span id="active-count" class="count-badge">— active</span>
+        <button id="refresh-alerts" class="button compact" type="button">Refresh now</button>
+      </div>
+    </section>
+
+    <div id="feed-error" class="notice danger hidden" role="alert"></div>
+
+    <section class="panel alerts-panel" aria-labelledby="alerts-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Official NWS feed</p>
+          <h2 id="alerts-heading">Active Van Wert County alerts</h2>
+        </div>
+        <div class="section-actions">
+          <button id="return-live" class="button compact secondary hidden" type="button">Return to live feed</button>
+          <button id="load-training" class="text-button" type="button">Open training lab</button>
+        </div>
+      </div>
+      <div id="alerts-list" class="alerts-list" aria-live="polite">
+        <div class="empty-state">Loading active alerts…</div>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace hidden" aria-label="Selected alert workspace">
+      <article class="panel message-panel">
+        <div id="training-banner" class="training-banner hidden">Training sample — not an active NWS alert</div>
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Operator-reviewed copy</p>
+            <h2 id="selected-event">Radio message</h2>
+          </div>
+          <span id="selected-status" class="event-badge"></span>
+        </div>
+
+        <dl id="alert-facts" class="alert-facts"></dl>
+
+        <label class="field-label" for="radio-message">Broadcast message</label>
+        <textarea id="radio-message" rows="11" spellcheck="true"></textarea>
+        <div id="print-message" class="print-message" aria-hidden="true"></div>
+        <p class="field-help">Review the message against the official alert before broadcasting. Your edits are saved on this device.</p>
+
+        <div class="message-actions">
+          <button id="copy-message" class="button primary" type="button">Copy message</button>
+          <button id="create-graphic" class="button secondary" type="button">Create alert graphic</button>
+          <button id="reset-message" class="button secondary" type="button">Restore generated copy</button>
+          <a id="official-alert-link" class="button secondary" href="#" target="_blank" rel="noopener">Open official alert</a>
+        </div>
+        <div id="copy-status" class="sr-status" aria-live="polite"></div>
+
+        <section class="nixle-box" aria-labelledby="nixle-heading">
+          <div class="nixle-heading-row">
+            <div>
+              <p class="section-kicker">Text alert</p>
+              <h3 id="nixle-heading">Nixle message</h3>
+            </div>
+            <strong id="nixle-count" class="character-count">0 / 120</strong>
+          </div>
+          <textarea id="nixle-message" rows="4" maxlength="120" spellcheck="true"></textarea>
+          <p class="field-help">Maximum 120 characters, including “VAN WERT, OHIO EMA.” Review before sending.</p>
+          <div class="message-actions">
+            <button id="copy-nixle" class="button primary" type="button">Copy Nixle text</button>
+            <button id="reset-nixle" class="button secondary" type="button">Restore generated text</button>
+          </div>
+        </section>
+      </article>
+
+      <aside class="panel operator-panel">
+        <div class="section-heading small">
+          <div>
+            <p class="section-kicker">Incident record</p>
+            <h2>Incident &amp; operator</h2>
+          </div>
+        </div>
+        <p id="incident-alert-count" class="incident-alert-count">1 alert included</p>
+        <label class="field-label" for="operator-name">Operator name</label>
+        <input id="operator-name" type="text" autocomplete="name" placeholder="Enter name">
+
+        <label class="field-label" for="incident-notes">Incident notes</label>
+        <textarea id="incident-notes" rows="5" placeholder="Optional notes"></textarea>
+
+        <dl class="incident-meta">
+          <div><dt>Incident opened</dt><dd id="incident-opened">—</dd></div>
+          <div><dt>Alert series</dt><dd id="series-id">—</dd></div>
+          <div><dt>Storage</dt><dd>This browser only</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <section id="channel-section" class="panel hidden" aria-labelledby="channel-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">One-click audit trail</p>
+          <h2 id="channel-heading">Channel time log</h2>
+        </div>
+        <span class="save-state">Saved automatically</span>
+      </div>
+      <p class="section-intro">Click the action immediately after completing it. Each click adds a separate, removable entry.</p>
+      <div id="channel-list" class="channel-list"></div>
+    </section>
+
+    <section id="staffing-section" class="panel hidden" aria-labelledby="staffing-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Optional</p>
+          <h2 id="staffing-heading">Office staffing</h2>
+        </div>
+        <button id="add-staff" class="button compact secondary" type="button">Add person</button>
+      </div>
+      <div class="table-scroll">
+        <table class="staff-table">
+          <thead><tr><th>Name</th><th>Position</th><th>Time in</th><th>Time out</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
+          <tbody id="staff-list"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel history-panel" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Stored on this device</p>
+          <h2 id="history-heading">Recent incidents</h2>
+        </div>
+        <button id="export-records" class="button compact secondary" type="button">Export JSON</button>
+      </div>
+      <div id="incident-history" class="incident-history"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Source: National Weather Service · County code OHC161</p>
+    <p class="safety-note">Decision-support tool only. Confirm alert details with official NWS information. Do not use this application to activate EAS equipment.</p>
+  </footer>
+
+  <dialog id="training-dialog" class="app-dialog training-dialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="section-kicker">Safe testing</p>
+        <h2>Training polygon lab</h2>
+      </div>
+      <button class="icon-button dialog-close" type="button" data-close-dialog="training-dialog" aria-label="Close training lab">×</button>
+    </div>
+    <p class="dialog-note">Load a clearly marked test alert, then select <strong>Create alert graphic</strong>. Random polygon creates a new shape every time.</p>
+    <div class="training-form">
+      <label>
+        <span>Alert type</span>
+        <select id="training-event">
+          <option>Severe Thunderstorm Warning</option>
+          <option>Tornado Warning</option>
+          <option>Severe Thunderstorm Watch</option>
+          <option>Tornado Watch</option>
+        </select>
+      </label>
+      <label>
+        <span>Test polygon</span>
+        <select id="training-polygon">
+          <option value="southeast">Southeast corner</option>
+          <option value="southwest">Southwest corner</option>
+          <option value="northeast">Northeast corner</option>
+          <option value="northwest">Northwest corner</option>
+          <option value="center">Center strip</option>
+          <option value="diagonal">Diagonal crossing</option>
+          <option value="full">Full county</option>
+          <option value="random">Random polygon</option>
+        </select>
+      </label>
+    </div>
+    <div class="dialog-actions">
+      <button id="start-training" class="button primary" type="button">Load training alert</button>
+      <button id="start-multi-training" class="button secondary" type="button">Load multi-alert exercise</button>
+      <button class="button secondary" type="button" data-close-dialog="training-dialog">Cancel</button>
+    </div>
+  </dialog>
+
+  <dialog id="graphic-dialog" class="app-dialog graphic-dialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="section-kicker">Shareable PNG</p>
+        <h2>Van Wert County alert graphic</h2>
+      </div>
+      <button class="icon-button dialog-close" type="button" data-close-dialog="graphic-dialog" aria-label="Close graphic preview">×</button>
+    </div>
+    <p class="dialog-note">EMA-generated decision-support graphic. The official NWS alert remains authoritative.</p>
+    <div class="canvas-wrap"><canvas id="alert-graphic" width="1200" height="675"></canvas></div>
+    <div class="dialog-actions">
+      <button id="download-graphic" class="button primary" type="button">Download PNG</button>
+      <button class="button secondary" type="button" data-close-dialog="graphic-dialog">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="report-dialog" class="app-dialog report-dialog">
+    <article id="completed-report" class="completed-report">
+      <header class="report-header">
+        <div>
+          <p>Van Wert County Emergency Management</p>
+          <h2>Weather Alert Activity Report</h2>
+        </div>
+        <div class="report-generated"><span>Report generated</span><strong id="report-generated">—</strong></div>
+      </header>
+
+      <section class="report-summary">
+        <h3 id="report-event">Weather alert</h3>
+        <dl>
+          <div><dt>Affected area</dt><dd id="report-area">—</dd></div>
+          <div><dt>Incident opened</dt><dd id="report-opened">—</dd></div>
+          <div><dt>Operator</dt><dd id="report-operator">—</dd></div>
+          <div><dt>Alert series</dt><dd id="report-series">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="report-section">
+        <h3>Alerts and prepared messages</h3>
+        <div id="report-messages" class="report-messages"></div>
+      </section>
+
+      <section class="report-section">
+        <h3>Communication log</h3>
+        <table class="report-table">
+          <thead><tr><th>Date and time</th><th>Channel</th><th>Action</th><th>Alert</th></tr></thead>
+          <tbody id="report-log"></tbody>
+        </table>
+      </section>
+
+      <section class="report-section">
+        <h3>Office staffing</h3>
+        <table class="report-table">
+          <thead><tr><th>Name</th><th>Position</th><th>Time in</th><th>Time out</th></tr></thead>
+          <tbody id="report-staff"></tbody>
+        </table>
+      </section>
+
+      <section class="report-section report-notes-section">
+        <h3>Incident notes</h3>
+        <p id="report-notes">No notes recorded.</p>
+      </section>
+
+      <footer class="report-footer">Generated from the operator's locally stored activity log. Verify against official records as required.</footer>
+    </article>
+    <div class="dialog-actions report-controls">
+      <button id="print-report" class="button primary" type="button">Print report</button>
+      <button class="button secondary" type="button" data-close-dialog="report-dialog">Close</button>
+    </div>
+  </dialog>
+
+  <noscript><div class="noscript">JavaScript is required to retrieve alerts and record event times.</div></noscript>
+  <script type="module" src="{{ "js/app.js" | relURL }}"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+baseURL = "/"
+languageCode = "en-us"
+title = "Van Wert County Weather Desk"
+disableKinds = ["taxonomy", "term", "RSS", "sitemap", "robotsTXT"]
+
+[params]
+  description = "Van Wert County severe weather radio message and event log"
+
