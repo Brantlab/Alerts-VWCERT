@@ -1,6 +1,6 @@
 # Van Wert County Weather Alert Desk
 
-Live site: <https://brantlab.github.io/Alerts-VWCERT/>
+Live site: <https://alerts.vwcert.org/>
 
 A Hugo progressive web app that retrieves active National Weather Service alerts for Van Wert County, Ohio (`OHC161`), prepares operator-reviewed radio copy, and records channel and staffing timestamps.
 
