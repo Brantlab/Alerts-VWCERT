@@ -3,6 +3,7 @@ import {
   alertPalette,
   affectedVanWertArea,
   extractLocations,
+  generateFacebookMessage,
   generateNixleMessage,
   generateRadioMessage,
   getSeriesId,
@@ -85,5 +86,14 @@ const nixleTornado = generateNixleMessage({ ...tornado, description: "Extreme so
 assert.ok(nixleTornado.length <= 120, `Nixle tornado warning is ${nixleTornado.length} characters`);
 assert.match(nixleTornado, /extreme SW Van Wert County/);
 assert.match(nixleTornado, /TAKE SHELTER NOW/);
+
+const facebookWarning = generateFacebookMessage(severe);
+assert.match(facebookWarning, /^🚨 SEVERE THUNDERSTORM WARNING/);
+assert.match(facebookWarning, /southern Van Wert County until Aug 10, 10:30 PM EDT/);
+assert.match(facebookWarning, /Hazards: wind gusts up to 60 mph and 1-inch hail/);
+
+const facebookTraining = generateFacebookMessage({ ...tornado, status: "Test", isTraining: true });
+assert.match(facebookTraining, /^TRAINING EXERCISE — DO NOT DISTRIBUTE/);
+assert.match(facebookTraining, /TAKE SHELTER NOW/);
 
 console.log("Alert parser tests passed.");

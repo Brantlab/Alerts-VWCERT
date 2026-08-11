@@ -186,6 +186,43 @@ export function generateNixleMessage(alert) {
   ]);
 }
 
+export function generateFacebookMessage(alert) {
+  const event = alert?.event || "Weather Alert";
+  const area = affectedVanWertArea(alert);
+  const until = formatTime(expirationValue(alert), true);
+  const isWarning = /Warning$/.test(event);
+  const heading = `${isWarning ? "🚨" : "⚠️"} ${event.toUpperCase()}`;
+  const training = alert?.isTraining || alert?.status === "Test"
+    ? "TRAINING EXERCISE — DO NOT DISTRIBUTE\n\n"
+    : "";
+
+  if (isCancellation(alert)) {
+    return `${training}${heading} CANCELLED\n\nThe National Weather Service has cancelled the ${event} for ${area}.`;
+  }
+  if (isExpiration(alert)) {
+    return `${training}${heading} EXPIRED\n\nThe ${event} for ${area} is no longer in effect.`;
+  }
+
+  const lines = [
+    `${training}${heading}`,
+    `The National Weather Service has issued a ${event} for ${area} until ${until}.`,
+  ];
+  const hazard = hazards(alert);
+  if (hazard) lines.push(`Hazards: ${hazard}.`);
+  else if (event === "Tornado Watch") lines.push("Threats include tornadoes, damaging winds, large hail, and lightning.");
+  else if (event === "Severe Thunderstorm Watch") lines.push("Threats include damaging winds, large hail, and lightning.");
+
+  if (event === "Tornado Warning") {
+    lines.push("TAKE SHELTER NOW. Move to an interior room on the lowest floor of a sturdy building, away from windows.");
+  } else if (event === "Severe Thunderstorm Warning") {
+    lines.push("Move indoors and stay away from windows until the warning has passed.");
+  } else {
+    lines.push("Stay weather aware and be prepared to act if a warning is issued.");
+  }
+  lines.push("Follow Van Wert County Emergency Management for updates.");
+  return lines.join("\n\n");
+}
+
 export function extractLocations(description) {
   const match = (description || "").match(/Locations impacted include\.\.\.\s*([\s\S]*?)(?:\n\s*\n|This includes|$)/i);
   if (!match) return "";

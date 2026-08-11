@@ -6,6 +6,7 @@ import {
   eventKind,
   formatDateTime,
   formatTime,
+  generateFacebookMessage,
   generateNixleMessage,
   generateRadioMessage,
   getParameter,
@@ -146,6 +147,7 @@ function addAlertToIncident(alert, isTraining = false) {
   const key = alertRecordKey(alert, isTraining);
   const newlyGenerated = generateRadioMessage(alert);
   const newlyGeneratedNixle = generateNixleMessage(alert);
+  const newlyGeneratedFacebook = generateFacebookMessage({ ...alert, isTraining });
   const existing = selectedIncident.alerts[key];
   selectedIncident.alerts[key] = {
     key,
@@ -161,6 +163,8 @@ function addAlertToIncident(alert, isTraining = false) {
     message: existing && existing.message !== existing.generatedMessage ? existing.message : newlyGenerated,
     generatedNixle: newlyGeneratedNixle,
     nixleMessage: existing && existing.nixleMessage !== existing.generatedNixle ? existing.nixleMessage : newlyGeneratedNixle,
+    generatedFacebook: newlyGeneratedFacebook,
+    facebookMessage: existing && existing.facebookMessage !== existing.generatedFacebook ? existing.facebookMessage : newlyGeneratedFacebook,
   };
   return key;
 }
@@ -368,6 +372,11 @@ function selectAlert(alert, isTraining) {
   elements["print-message"].textContent = alertRecord.message;
   elements["nixle-message"].value = alertRecord.nixleMessage;
   updateNixleCount();
+  elements["facebook-message"].value = alertRecord.facebookMessage;
+  elements["share-facebook"].disabled = isTraining;
+  elements["open-facebook"].classList.toggle("disabled-link", isTraining);
+  elements["open-facebook"].setAttribute("aria-disabled", String(isTraining));
+  elements["open-facebook"].tabIndex = isTraining ? -1 : 0;
   elements["operator-name"].value = selectedIncident.operator;
   elements["incident-notes"].value = selectedIncident.notes;
   elements["incident-opened"].textContent = formatDateTime(selectedIncident.openedAt);
@@ -573,6 +582,8 @@ function populateReport(incident = selectedIncident) {
       card.append(makeElement("p", "report-message", alert.message || "No radio message recorded."));
       card.append(makeElement("strong", "report-message-label", "Nixle text"));
       card.append(makeElement("p", "report-message", alert.nixleMessage || "No Nixle text recorded."));
+      card.append(makeElement("strong", "report-message-label", "Facebook post"));
+      card.append(makeElement("p", "report-message", alert.facebookMessage || "No Facebook post recorded."));
       messages.append(card);
     });
 
@@ -883,6 +894,36 @@ async function copyNixle() {
   }
 }
 
+async function copyFacebook() {
+  try {
+    await navigator.clipboard.writeText(elements["facebook-message"].value);
+    elements["copy-status"].textContent = "Facebook post copied to clipboard.";
+    elements["copy-facebook"].textContent = "Copied";
+    setTimeout(() => { elements["copy-facebook"].textContent = "Copy Facebook post"; }, 1500);
+  } catch {
+    elements["facebook-message"].select();
+    elements["copy-status"].textContent = "Facebook post selected. Use your system copy command.";
+  }
+}
+
+async function shareFacebook() {
+  if (trainingMode) return;
+  const text = elements["facebook-message"].value;
+  const url = selectedAlert?.["@id"] || selectedAlert?.id || "";
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: selectedAlert?.event || "Van Wert County weather alert", text, ...(url ? { url } : {}) });
+      elements["copy-status"].textContent = "Post sent to the device share menu.";
+      return;
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+    }
+  }
+  await copyFacebook();
+  window.open("https://www.facebook.com/", "_blank", "noopener");
+  elements["copy-status"].textContent = "Post copied. Paste it into the Facebook page composer.";
+}
+
 function exportRecords() {
   const blob = new Blob([JSON.stringify(loadIncidents(), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -907,6 +948,11 @@ elements["start-multi-training"].addEventListener("click", () => {
 elements["return-live"].addEventListener("click", returnToLiveFeed);
 elements["copy-message"].addEventListener("click", copyMessage);
 elements["copy-nixle"].addEventListener("click", copyNixle);
+elements["copy-facebook"].addEventListener("click", copyFacebook);
+elements["share-facebook"].addEventListener("click", shareFacebook);
+elements["open-facebook"].addEventListener("click", (event) => {
+  if (trainingMode) event.preventDefault();
+});
 elements["create-graphic"].addEventListener("click", renderAlertGraphic);
 elements["download-graphic"].addEventListener("click", downloadGraphic);
 elements["reset-message"].addEventListener("click", () => {
@@ -936,6 +982,18 @@ elements["nixle-message"].addEventListener("input", (event) => {
   alertRecord.nixleMessage = event.target.value.slice(0, 120);
   if (event.target.value !== alertRecord.nixleMessage) event.target.value = alertRecord.nixleMessage;
   updateNixleCount();
+  persistIncident();
+});
+elements["reset-facebook"].addEventListener("click", () => {
+  const alertRecord = currentAlertRecord();
+  alertRecord.facebookMessage = alertRecord.generatedFacebook;
+  elements["facebook-message"].value = alertRecord.facebookMessage;
+  persistIncident();
+});
+elements["facebook-message"].addEventListener("input", (event) => {
+  const alertRecord = currentAlertRecord();
+  if (!alertRecord) return;
+  alertRecord.facebookMessage = event.target.value;
   persistIncident();
 });
 elements["operator-name"].addEventListener("input", (event) => {

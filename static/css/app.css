@@ -29,6 +29,7 @@ body { margin: 0; min-width: 320px; background: var(--paper); }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .6; }
+.disabled-link { pointer-events: none; opacity: .55; }
 
 .skip-link { position: fixed; left: 1rem; top: -5rem; z-index: 100; padding: .75rem 1rem; background: white; color: var(--navy); border-radius: 8px; }
 .skip-link:focus { top: 1rem; }
@@ -113,11 +114,13 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .print-message { display: none; }
 .message-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
 .nixle-box { margin-top: 1.5rem; padding: 1rem; background: var(--teal-soft); border: 1px solid #b9dce2; border-radius: 12px; }
+.facebook-box { margin-top: 1rem; padding: 1rem; background: #eef3ff; border: 1px solid #c6d4f2; border-radius: 12px; }
 .nixle-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .7rem; }
 .nixle-heading-row h3 { margin: 0; color: var(--navy); font-size: 1.05rem; }
 .character-count { color: var(--green); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; white-space: nowrap; }
 .character-count.near-limit { color: #9a4d00; }
 #nixle-message { background: white; }
+#facebook-message { background: white; }
 .incident-meta { margin-top: 1.25rem; border-top: 1px solid var(--line); }
 .incident-alert-count { margin: -.45rem 0 .8rem; color: var(--teal); font-size: .78rem; font-weight: 850; }
 .incident-meta div { padding: .7rem 0; border-bottom: 1px solid var(--line); }
