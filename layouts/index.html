@@ -161,19 +161,9 @@
             </div>
             <span class="save-state">Saved automatically</span>
           </div>
-          <p class="field-help operation-help">Select each siren as it is activated. The activation time is recorded automatically.</p>
+          <p class="field-help operation-help">Activate each siren as it is started. Every siren runs its own three-minute countdown and can be reactivated when complete.</p>
+          <div id="siren-cycle-summary" class="siren-cycle-summary" aria-live="polite">No siren cycles running</div>
           <div id="siren-list" class="siren-list"></div>
-        </section>
-
-        <section class="operation-card timer-card" aria-labelledby="siren-timer-heading">
-          <p class="section-kicker">Run time</p>
-          <h3 id="siren-timer-heading">Siren timer</h3>
-          <output id="siren-elapsed" class="operations-clock" aria-live="off">03:00</output>
-          <p id="siren-timer-status" class="timer-status">Not started</p>
-          <div class="timer-actions">
-            <button id="start-siren-timer" class="button danger-button" type="button">Start siren timer</button>
-            <button id="stop-siren-timer" class="button secondary" type="button" disabled>Stop timer</button>
-          </div>
         </section>
 
       </div>
@@ -363,23 +353,6 @@
     </div>
   </dialog>
 
-  <dialog id="siren-complete-dialog" class="app-dialog siren-complete-dialog">
-    <div class="siren-complete-banner" role="alert">
-      <span aria-hidden="true">✓</span>
-      <div>
-        <p>Siren timer</p>
-        <h2>Three-minute cycle complete</h2>
-      </div>
-    </div>
-    <div class="siren-complete-copy">
-      <p>The tornado siren timer has reached zero and the run was stopped automatically.</p>
-      <strong id="siren-complete-time">Completed now</strong>
-    </div>
-    <div class="dialog-actions">
-      <button class="button primary" type="button" data-close-dialog="siren-complete-dialog">Acknowledge</button>
-    </div>
-  </dialog>
-
   <dialog id="report-dialog" class="app-dialog report-dialog">
     <article id="completed-report" class="completed-report">
       <header class="report-header">
@@ -417,7 +390,7 @@
         <h3>Tornado siren operations</h3>
         <dl class="report-operation-summary">
           <div><dt>Sirens activated</dt><dd id="report-sirens">None recorded</dd></div>
-          <div><dt>Siren run time</dt><dd id="report-siren-runtime">Not recorded</dd></div>
+          <div><dt>Siren cycles</dt><dd id="report-siren-runtime">Not recorded</dd></div>
           <div><dt>Last broadcast</dt><dd id="report-last-broadcast">Not recorded</dd></div>
         </dl>
       </section>

@@ -146,16 +146,17 @@ function createIncident(isTraining = false) {
     alerts: {},
     logs: {},
     staff: DEFAULT_STAFF.map(([name, position]) => ({ id: crypto.randomUUID(), name, position, timeIn: "", timeOut: "" })),
-    tornadoOperations: { sirens: {}, sirenRuns: [], broadcasts: [] },
+    tornadoOperations: { sirens: {}, sirenRuns: [], sirenCycles: {}, broadcasts: [] },
     spotterActivation: { initialized: false, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] },
   };
 }
 
 function tornadoOperations(incident = selectedIncident) {
   if (!incident) return null;
-  incident.tornadoOperations ||= { sirens: {}, sirenRuns: [], broadcasts: [] };
+  incident.tornadoOperations ||= { sirens: {}, sirenRuns: [], sirenCycles: {}, broadcasts: [] };
   incident.tornadoOperations.sirens ||= {};
   incident.tornadoOperations.sirenRuns ||= [];
+  incident.tornadoOperations.sirenCycles ||= {};
   incident.tornadoOperations.broadcasts ||= [];
   return incident.tornadoOperations;
 }
@@ -236,8 +237,7 @@ function startIncidentSession({ isTraining = false, alerts = activeAlerts } = {}
 function completeIncidentSession() {
   if (!selectedIncident) return;
   selectedIncident.closedAt = new Date().toISOString();
-  const activeSirenRun = currentSirenRun(tornadoOperations());
-  if (activeSirenRun) activeSirenRun.endedAt = selectedIncident.closedAt;
+  stopActiveSirenCycles(tornadoOperations(), selectedIncident.closedAt);
   persistIncident();
   localStorage.removeItem(ACTIVE_INCIDENT_KEY);
   reportIncident = selectedIncident;
@@ -372,8 +372,7 @@ function startMultiAlertExercise() {
 function returnToLiveFeed() {
   if (selectedIncident?.isTraining) {
     selectedIncident.closedAt = new Date().toISOString();
-    const activeSirenRun = currentSirenRun(tornadoOperations());
-    if (activeSirenRun) activeSirenRun.endedAt = selectedIncident.closedAt;
+    stopActiveSirenCycles(tornadoOperations(), selectedIncident.closedAt);
     persistIncident();
     localStorage.removeItem(ACTIVE_INCIDENT_KEY);
   }
@@ -452,18 +451,6 @@ function selectedIsActiveTornadoWarning() {
   return selectedAlert?.event === "Tornado Warning" && !["cancel", "expire"].includes(eventKind(selectedAlert));
 }
 
-function currentSirenRun(operations) {
-  return [...operations.sirenRuns].reverse().find((run) => !run.endedAt);
-}
-
-function completedSirenMilliseconds(operations) {
-  return operations.sirenRuns.reduce((total, run) => {
-    const start = new Date(run.startedAt).getTime();
-    const end = new Date(run.endedAt || Date.now()).getTime();
-    return total + Math.max(0, end - start);
-  }, 0);
-}
-
 function sirenRunMilliseconds(run) {
   if (!run) return 0;
   const start = new Date(run.startedAt).getTime();
@@ -471,36 +458,81 @@ function sirenRunMilliseconds(run) {
   return Math.max(0, end - start);
 }
 
-function expireSirenRun(run) {
-  const completedAt = new Date(new Date(run.startedAt).getTime() + SIREN_DURATION).toISOString();
-  run.endedAt = completedAt;
-  run.expired = true;
-  run.notifiedAt = new Date().toISOString();
-  persistIncident();
-  elements["start-siren-timer"].disabled = false;
-  elements["stop-siren-timer"].disabled = true;
-  elements["siren-complete-time"].textContent = `Completed ${formatDateTime(completedAt)}`;
-  if (!elements["siren-complete-dialog"].open) elements["siren-complete-dialog"].showModal();
+function sirenCyclesFor(operations, name) {
+  operations.sirenCycles[name] ||= [];
+  return operations.sirenCycles[name];
+}
+
+function activeSirenCycle(operations, name) {
+  return [...sirenCyclesFor(operations, name)].reverse().find((cycle) => !cycle.endedAt);
+}
+
+function stopActiveSirenCycles(operations, endedAt) {
+  Object.values(operations.sirenCycles || {}).flat().filter((cycle) => !cycle.endedAt).forEach((cycle) => {
+    cycle.endedAt = endedAt;
+  });
+  const legacyRun = [...(operations.sirenRuns || [])].reverse().find((run) => !run.endedAt);
+  if (legacyRun) legacyRun.endedAt = endedAt;
+}
+
+function expireSirenCycles(operations) {
+  let changed = false;
+  SIRENS.forEach((name) => {
+    const cycle = activeSirenCycle(operations, name);
+    if (!cycle || sirenRunMilliseconds(cycle) < SIREN_DURATION) return;
+    cycle.endedAt = new Date(new Date(cycle.startedAt).getTime() + SIREN_DURATION).toISOString();
+    cycle.expired = true;
+    changed = true;
+  });
+  if (changed) persistIncident();
+}
+
+function updateSirenDisplays(operations) {
+  const running = [];
+  const completed = [];
+  elements["siren-list"].querySelectorAll("[data-siren-name]").forEach((card) => {
+    const name = card.dataset.sirenName;
+    const cycles = sirenCyclesFor(operations, name);
+    const latest = cycles.at(-1);
+    const active = activeSirenCycle(operations, name);
+    const timer = card.querySelector(".siren-countdown");
+    const status = card.querySelector(".siren-cycle-status");
+    const button = card.querySelector(".siren-activate-button");
+    card.classList.toggle("running", Boolean(active));
+    card.classList.toggle("complete", Boolean(latest?.expired && !active));
+    if (active) {
+      const remaining = Math.max(0, SIREN_DURATION - sirenRunMilliseconds(active));
+      timer.textContent = formatElapsed(Math.ceil(remaining / 1000) * 1000);
+      status.textContent = `Cycle ${cycles.length} running`;
+      button.textContent = "Running";
+      button.disabled = true;
+      running.push(name);
+    } else if (latest) {
+      timer.textContent = latest.expired ? "00:00" : "Stopped";
+      status.textContent = latest.expired ? `${cycles.length} cycle${cycles.length === 1 ? "" : "s"} complete` : "Last cycle stopped";
+      button.textContent = "Reactivate";
+      button.disabled = false;
+      if (latest.expired) completed.push(name);
+    } else {
+      timer.textContent = "03:00";
+      status.textContent = "Ready";
+      button.textContent = "Activate";
+      button.disabled = false;
+    }
+  });
+  const summary = elements["siren-cycle-summary"];
+  summary.classList.toggle("complete", !running.length && completed.length > 0);
+  summary.textContent = running.length
+    ? `Running: ${running.join(", ")}${completed.length ? ` · Complete: ${completed.join(", ")}` : ""}`
+    : completed.length ? `Cycle complete — ready to reactivate: ${completed.join(", ")}` : "No siren cycles running";
 }
 
 function updateOperationsClocks() {
   if (!selectedIncident) return;
   const operations = tornadoOperations();
-  let activeRun = currentSirenRun(operations);
-  if (activeRun && sirenRunMilliseconds(activeRun) >= SIREN_DURATION) {
-    expireSirenRun(activeRun);
-    activeRun = null;
-  }
+  expireSirenCycles(operations);
   if (!elements["tornado-operations"].classList.contains("hidden")) {
-    const latestRun = operations.sirenRuns.at(-1);
-    const remaining = latestRun ? Math.max(0, SIREN_DURATION - sirenRunMilliseconds(latestRun)) : SIREN_DURATION;
-    const displayRemaining = Math.ceil(remaining / 1000) * 1000;
-    elements["siren-elapsed"].textContent = formatElapsed(displayRemaining);
-    elements["siren-elapsed"].classList.toggle("complete", Boolean(latestRun?.expired));
-    elements["siren-timer-status"].textContent = activeRun
-      ? `Running since ${formatDateTime(activeRun.startedAt)}`
-      : latestRun?.expired ? "Three-minute cycle complete"
-        : latestRun ? `Stopped with ${formatElapsed(displayRemaining)} remaining` : "Ready for a three-minute cycle";
+    updateSirenDisplays(operations);
   }
   const lastBroadcast = operations.broadcasts.at(-1);
   elements["broadcast-elapsed"].textContent = lastBroadcast ? formatElapsed(Date.now() - new Date(lastBroadcast.at).getTime()) : "—";
@@ -524,42 +556,27 @@ function renderTornadoOperations() {
   const list = elements["siren-list"];
   list.replaceChildren();
   SIRENS.forEach((name) => {
-    const label = makeElement("label", "siren-item");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = Boolean(operations.sirens[name]);
-    const detail = makeElement("span", "siren-item-copy");
-    detail.append(makeElement("strong", "", name), makeElement("small", "", operations.sirens[name] ? `Activated ${formatTime(operations.sirens[name])}` : "Not activated"));
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) operations.sirens[name] = new Date().toISOString();
-      else delete operations.sirens[name];
-      persistIncident();
-      renderTornadoOperations();
-    });
-    label.append(checkbox, detail);
-    list.append(label);
+    const card = makeElement("article", "siren-item");
+    card.dataset.sirenName = name;
+    const heading = makeElement("div", "siren-item-heading");
+    heading.append(makeElement("strong", "", name), makeElement("output", "siren-countdown", "03:00"));
+    const status = makeElement("small", "siren-cycle-status", "Ready");
+    const button = makeElement("button", "button compact siren-activate-button", "Activate");
+    button.type = "button";
+    button.addEventListener("click", () => activateSiren(name));
+    card.append(heading, status, button);
+    list.append(card);
   });
-
-  const activeRun = currentSirenRun(operations);
-  elements["start-siren-timer"].disabled = Boolean(activeRun);
-  elements["stop-siren-timer"].disabled = !activeRun;
   updateOperationsClocks();
   ensureOperationsTimer();
 }
 
-function startSirenTimer() {
+function activateSiren(name) {
   const operations = tornadoOperations();
-  if (!operations || currentSirenRun(operations)) return;
-  operations.sirenRuns.push({ id: crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: "" });
-  persistIncident();
-  renderTornadoOperations();
-}
-
-function stopSirenTimer() {
-  const operations = tornadoOperations();
-  const run = operations && currentSirenRun(operations);
-  if (!run) return;
-  run.endedAt = new Date().toISOString();
+  if (!operations || activeSirenCycle(operations, name)) return;
+  const startedAt = new Date().toISOString();
+  sirenCyclesFor(operations, name).push({ id: crypto.randomUUID(), startedAt, endedAt: "", expired: false });
+  operations.sirens[name] = startedAt;
   persistIncident();
   renderTornadoOperations();
 }
@@ -942,13 +959,20 @@ function populateReport(incident = selectedIncident) {
   ]));
 
   const operations = tornadoOperations(incident);
-  const hasTornadoOperations = Object.keys(operations.sirens).length || operations.sirenRuns.length || operations.broadcasts.length;
+  const individualCycles = Object.values(operations.sirenCycles || {}).flat();
+  const hasTornadoOperations = Object.keys(operations.sirens).length || operations.sirenRuns.length || individualCycles.length || operations.broadcasts.length;
   elements["report-tornado-section"].classList.toggle("hidden", !hasTornadoOperations);
-  elements["report-sirens"].textContent = Object.entries(operations.sirens)
-    .map(([name, at]) => `${name} (${formatDateTime(at)})`).join(", ") || "None recorded";
-  elements["report-siren-runtime"].textContent = operations.sirenRuns.length
-    ? `${formatElapsed(completedSirenMilliseconds(operations))} across ${operations.sirenRuns.length} run${operations.sirenRuns.length === 1 ? "" : "s"}`
-    : "Not recorded";
+  elements["report-sirens"].textContent = SIRENS.filter((name) => operations.sirens[name] || operations.sirenCycles[name]?.length)
+    .map((name) => {
+      const cycles = operations.sirenCycles[name] || [];
+      const at = cycles.at(-1)?.startedAt || operations.sirens[name];
+      return `${name} (${cycles.length || 1} activation${(cycles.length || 1) === 1 ? "" : "s"}; last ${formatDateTime(at)})`;
+    }).join(", ") || "None recorded";
+  const completedCycles = individualCycles.filter((cycle) => cycle.expired).length;
+  const activeCycles = individualCycles.filter((cycle) => !cycle.endedAt).length;
+  elements["report-siren-runtime"].textContent = individualCycles.length
+    ? `${individualCycles.length} activation cycle${individualCycles.length === 1 ? "" : "s"} · ${completedCycles} completed full three-minute run${completedCycles === 1 ? "" : "s"}${activeCycles ? ` · ${activeCycles} running` : ""}`
+    : operations.sirenRuns.length ? `${operations.sirenRuns.length} legacy siren run${operations.sirenRuns.length === 1 ? "" : "s"}` : "Not recorded";
   const lastBroadcast = operations.broadcasts.at(-1);
   elements["report-last-broadcast"].textContent = lastBroadcast
     ? `${formatDateTime(lastBroadcast.at)} (${operations.broadcasts.length} total)` : "Not recorded";
@@ -1416,8 +1440,6 @@ document.querySelectorAll('input[name="spotter-product"]').forEach((input) => {
   });
 });
 elements["add-staff"].addEventListener("click", addStaff);
-elements["start-siren-timer"].addEventListener("click", startSirenTimer);
-elements["stop-siren-timer"].addEventListener("click", stopSirenTimer);
 elements["log-broadcast"].addEventListener("click", logBroadcast);
 elements["start-incident"].addEventListener("click", () => {
   startIncidentSession({ isTraining: exerciseMode, alerts: activeAlerts });
