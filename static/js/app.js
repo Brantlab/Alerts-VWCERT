@@ -246,6 +246,7 @@ function completeIncidentSession() {
   selectedIncident = null;
   selectedAlert = null;
   selectedAlertKey = null;
+  updateFloatingSirenStatus(null);
   elements.workspace.classList.add("hidden");
   elements["channel-section"].classList.add("hidden");
   elements["tornado-operations"].classList.add("hidden");
@@ -381,6 +382,7 @@ function returnToLiveFeed() {
   selectedAlert = null;
   selectedIncident = null;
   trainingMode = false;
+  updateFloatingSirenStatus(null);
   elements.workspace.classList.add("hidden");
   elements["channel-section"].classList.add("hidden");
   elements["tornado-operations"].classList.add("hidden");
@@ -527,10 +529,59 @@ function updateSirenDisplays(operations) {
     : completed.length ? `Cycle complete — ready to reactivate: ${completed.join(", ")}` : "No siren cycles running";
 }
 
+function updateFloatingSirenStatus(operations) {
+  const panel = elements["siren-floating-status"];
+  if (!operations) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const running = [];
+  const completed = [];
+  SIRENS.forEach((name) => {
+    const cycles = sirenCyclesFor(operations, name);
+    const active = activeSirenCycle(operations, name);
+    const completedCount = cycles.filter((cycle) => cycle.expired).length;
+    if (active) {
+      const remaining = Math.max(0, SIREN_DURATION - sirenRunMilliseconds(active));
+      running.push({ name, remaining: Math.ceil(remaining / 1000) * 1000 });
+    }
+    if (completedCount) completed.push({ name, count: completedCount });
+  });
+  if (!running.length && !completed.length) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  elements["siren-floating-count"].textContent = `${running.length} running`;
+  const availableTornadoAlert = activeAlerts.find((alert) => alert.event === "Tornado Warning" && !["cancel", "expire"].includes(eventKind(alert)));
+  elements["view-siren-controls"].disabled = !availableTornadoAlert;
+  elements["view-siren-controls"].textContent = availableTornadoAlert ? "View siren controls" : "Warning no longer active";
+  const runningList = elements["siren-floating-running"];
+  runningList.replaceChildren();
+  if (running.length) {
+    runningList.append(makeElement("strong", "siren-floating-label", "Running"));
+    running.forEach(({ name, remaining }) => {
+      const row = makeElement("div", "siren-floating-row running");
+      row.append(makeElement("span", "", name), makeElement("time", "", formatElapsed(remaining)));
+      runningList.append(row);
+    });
+  }
+  const completeList = elements["siren-floating-complete"];
+  completeList.replaceChildren();
+  if (completed.length) {
+    completeList.append(makeElement("strong", "siren-floating-label", "Completed"));
+    completeList.append(makeElement("p", "", completed.map(({ name, count }) => `${name}${count > 1 ? ` ×${count}` : ""}`).join(" · ")));
+  }
+}
+
 function updateOperationsClocks() {
-  if (!selectedIncident) return;
+  if (!selectedIncident) {
+    updateFloatingSirenStatus(null);
+    return;
+  }
   const operations = tornadoOperations();
   expireSirenCycles(operations);
+  updateFloatingSirenStatus(operations);
   if (!elements["tornado-operations"].classList.contains("hidden")) {
     updateSirenDisplays(operations);
   }
@@ -1441,6 +1492,12 @@ document.querySelectorAll('input[name="spotter-product"]').forEach((input) => {
 });
 elements["add-staff"].addEventListener("click", addStaff);
 elements["log-broadcast"].addEventListener("click", logBroadcast);
+elements["view-siren-controls"].addEventListener("click", () => {
+  const tornadoAlert = activeAlerts.find((alert) => alert.event === "Tornado Warning" && !["cancel", "expire"].includes(eventKind(alert)));
+  if (!tornadoAlert) return;
+  selectAlert(tornadoAlert, Boolean(tornadoAlert.isTraining));
+  requestAnimationFrame(() => elements["tornado-operations"].scrollIntoView({ behavior: "smooth", block: "start" }));
+});
 elements["start-incident"].addEventListener("click", () => {
   startIncidentSession({ isTraining: exerciseMode, alerts: activeAlerts });
   const firstAlert = activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).sort((a, b) => alertPriority(a) - alertPriority(b))[0];

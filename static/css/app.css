@@ -212,6 +212,19 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .bottom-action-button strong { color: var(--navy); font-size: .92rem; }
 .bottom-action-button small { margin-top: .2rem; color: var(--muted); font-size: .72rem; }
 
+.siren-floating-status { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(310px, calc(100vw - 2rem)); max-height: min(70vh, 520px); padding: .8rem; color: var(--ink); background: white; border: 2px solid var(--red); border-radius: 12px; box-shadow: 0 14px 38px rgba(10,38,57,.28); overflow-y: auto; }
+.siren-floating-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line); }
+.siren-floating-heading p { margin: 0 0 .1rem; color: var(--red); font-size: .62rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.siren-floating-heading h2 { margin: 0; color: var(--navy); font-size: .95rem; }
+.siren-floating-count { padding: .22rem .45rem; color: white; background: var(--red); border-radius: 999px; font-size: .65rem; font-weight: 850; white-space: nowrap; }
+.siren-floating-label { display: block; margin: .55rem 0 .25rem; color: var(--muted); font-size: .6rem; letter-spacing: .07em; text-transform: uppercase; }
+.siren-floating-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .3rem .45rem; background: var(--red-soft); border-radius: 6px; font-size: .72rem; font-weight: 800; }
+.siren-floating-row + .siren-floating-row { margin-top: .25rem; }
+.siren-floating-row time { color: var(--red); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.siren-floating-complete p { margin: 0; color: #654e00; font-size: .68rem; font-weight: 750; line-height: 1.45; }
+.siren-floating-link { width: 100%; margin-top: .65rem; padding: .4rem; color: var(--teal); background: #f3f8f9; border: 1px solid #bad0d6; border-radius: 7px; font-size: .7rem; font-weight: 850; }
+.siren-floating-link:disabled { color: var(--muted); cursor: default; opacity: .7; }
+
 footer { width: min(1180px, calc(100% - 2rem)); margin: 0 auto 2rem; color: var(--muted); font-size: .75rem; text-align: center; }
 footer p { margin: .3rem; }
 .safety-note { font-weight: 650; }
@@ -336,7 +349,7 @@ footer p { margin: .3rem; }
   :root { background: white; }
   body { background: white; font-size: 10pt; }
   .site-header { padding: 0 0 12pt; color: black; background: white; border-bottom: 2pt solid black; }
-  .brand-mark, .header-actions, .status-strip, .alerts-panel, .notice, footer, .message-actions, .section-kicker, .save-state, .section-intro, .log-button, #add-staff, .history-panel, .bottom-actions, .field-help, .training-banner { display: none !important; }
+  .brand-mark, .header-actions, .status-strip, .alerts-panel, .notice, footer, .message-actions, .section-kicker, .save-state, .section-intro, .log-button, #add-staff, .history-panel, .bottom-actions, .siren-floating-status, .field-help, .training-banner { display: none !important; }
   .app-shell { width: 100%; margin: 12pt 0 0; }
   .workspace { display: block; margin: 0; }
   .panel { padding: 10pt 0; border: 0; border-radius: 0; box-shadow: none; }
