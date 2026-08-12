@@ -5,6 +5,7 @@ import {
   channelsFor,
   eventKind,
   formatDateTime,
+  formatElapsed,
   formatTime,
   generateFacebookMessage,
   generateNixleMessage,
@@ -21,6 +22,8 @@ const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
+const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
+const SPOTTER_DEPARTMENTS = ["Convoy", "Willshire", "Wren", "Ohio City", "Middle Point", "Scott", "Van Wert", "CERT", "Amateur"];
 
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 let activeAlerts = [];
@@ -32,6 +35,7 @@ let installPrompt = null;
 let countyGeometry = null;
 let reportIncident = null;
 let exerciseMode = false;
+let operationsTimer = null;
 
 const trainingPolygons = {
   southeast: { area: "southeastern", points: [[-84.62, 40.84], [-84.34, 40.83], [-84.35, 40.67], [-84.57, 40.69]] },
@@ -135,7 +139,39 @@ function createIncident(isTraining = false) {
     alerts: {},
     logs: {},
     staff: [],
+    tornadoOperations: { sirens: {}, sirenRuns: [], broadcasts: [] },
+    spotterActivation: { initialized: false, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] },
   };
+}
+
+function tornadoOperations(incident = selectedIncident) {
+  if (!incident) return null;
+  incident.tornadoOperations ||= { sirens: {}, sirenRuns: [], broadcasts: [] };
+  incident.tornadoOperations.sirens ||= {};
+  incident.tornadoOperations.sirenRuns ||= [];
+  incident.tornadoOperations.broadcasts ||= [];
+  return incident.tornadoOperations;
+}
+
+function spotterActivation(incident = selectedIncident) {
+  if (!incident) return null;
+  incident.spotterActivation ||= { initialized: false, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] };
+  incident.spotterActivation.departments ||= {};
+  incident.spotterActivation.reports ||= [];
+  return incident.spotterActivation;
+}
+
+function initializeSpotterFromIncident() {
+  const spotter = spotterActivation();
+  if (!spotter || spotter.initialized) return;
+  const events = Object.values(selectedIncident.alerts || {}).map((alert) => alert.event || "");
+  spotter.severeThunderstorm = events.some((event) => event.startsWith("Severe Thunderstorm"));
+  spotter.tornado = events.some((event) => event.startsWith("Tornado"));
+  const hasWatch = events.some((event) => event.endsWith("Watch"));
+  const hasWarning = events.some((event) => event.endsWith("Warning"));
+  spotter.nwsProduct = hasWatch && hasWarning ? "Both" : hasWarning ? "Warning" : hasWatch ? "Watch" : "";
+  spotter.initialized = true;
+  persistIncident();
 }
 
 function alertRecordKey(alert, isTraining = false) {
@@ -193,6 +229,8 @@ function startIncidentSession({ isTraining = false, alerts = activeAlerts } = {}
 function completeIncidentSession() {
   if (!selectedIncident) return;
   selectedIncident.closedAt = new Date().toISOString();
+  const activeSirenRun = currentSirenRun(tornadoOperations());
+  if (activeSirenRun) activeSirenRun.endedAt = selectedIncident.closedAt;
   persistIncident();
   localStorage.removeItem(ACTIVE_INCIDENT_KEY);
   reportIncident = selectedIncident;
@@ -203,7 +241,9 @@ function completeIncidentSession() {
   selectedAlertKey = null;
   elements.workspace.classList.add("hidden");
   elements["channel-section"].classList.add("hidden");
+  elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setSpotterExpanded(false);
   setIncidentControls(false);
   renderAlerts();
 }
@@ -301,13 +341,15 @@ function startMultiAlertExercise() {
   activeAlerts = [
     buildTrainingAlert("Severe Thunderstorm Watch", "full"),
     buildTrainingAlert("Tornado Watch", "diagonal"),
-    buildTrainingAlert("Severe Thunderstorm Warning", "southeast"),
+    buildTrainingAlert("Tornado Warning", "southeast"),
   ].map((alert) => ({ ...alert, isTraining: true }));
   selectedAlert = null;
   trainingMode = false;
   elements.workspace.classList.add("hidden");
   elements["channel-section"].classList.add("hidden");
+  elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setSpotterExpanded(false);
   elements["refresh-alerts"].disabled = true;
   elements["return-live"].classList.remove("hidden");
   elements["feed-dot"].className = "status-dot checking";
@@ -321,6 +363,8 @@ function startMultiAlertExercise() {
 function returnToLiveFeed() {
   if (selectedIncident?.isTraining) {
     selectedIncident.closedAt = new Date().toISOString();
+    const activeSirenRun = currentSirenRun(tornadoOperations());
+    if (activeSirenRun) activeSirenRun.endedAt = selectedIncident.closedAt;
     persistIncident();
     localStorage.removeItem(ACTIVE_INCIDENT_KEY);
   }
@@ -331,7 +375,9 @@ function returnToLiveFeed() {
   trainingMode = false;
   elements.workspace.classList.add("hidden");
   elements["channel-section"].classList.add("hidden");
+  elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setSpotterExpanded(false);
   elements["report-button"].disabled = true;
   elements["return-live"].classList.add("hidden");
   elements["refresh-alerts"].disabled = false;
@@ -387,9 +433,102 @@ function selectAlert(alert, isTraining) {
   elements["report-button"].disabled = false;
 
   renderChannels();
+  renderTornadoOperations();
   renderStaff();
   renderAlerts();
   elements.workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function selectedIsActiveTornadoWarning() {
+  return selectedAlert?.event === "Tornado Warning" && !["cancel", "expire"].includes(eventKind(selectedAlert));
+}
+
+function currentSirenRun(operations) {
+  return [...operations.sirenRuns].reverse().find((run) => !run.endedAt);
+}
+
+function completedSirenMilliseconds(operations) {
+  return operations.sirenRuns.reduce((total, run) => {
+    const start = new Date(run.startedAt).getTime();
+    const end = new Date(run.endedAt || Date.now()).getTime();
+    return total + Math.max(0, end - start);
+  }, 0);
+}
+
+function updateOperationsClocks() {
+  if (!selectedIncident || elements["tornado-operations"].classList.contains("hidden")) return;
+  const operations = tornadoOperations();
+  const activeRun = currentSirenRun(operations);
+  elements["siren-elapsed"].textContent = formatElapsed(completedSirenMilliseconds(operations));
+  elements["siren-timer-status"].textContent = activeRun
+    ? `Running since ${formatDateTime(activeRun.startedAt)}`
+    : operations.sirenRuns.length ? `${operations.sirenRuns.length} run${operations.sirenRuns.length === 1 ? "" : "s"} recorded` : "Not started";
+  const lastBroadcast = operations.broadcasts.at(-1);
+  elements["broadcast-elapsed"].textContent = lastBroadcast ? formatElapsed(Date.now() - new Date(lastBroadcast.at).getTime()) : "—";
+  elements["broadcast-timer-status"].textContent = lastBroadcast
+    ? `Last logged ${formatDateTime(lastBroadcast.at)} · ${operations.broadcasts.length} total`
+    : "No broadcast logged";
+}
+
+function ensureOperationsTimer() {
+  if (operationsTimer) return;
+  operationsTimer = window.setInterval(updateOperationsClocks, 1000);
+}
+
+function renderTornadoOperations() {
+  const visible = selectedIsActiveTornadoWarning();
+  elements["tornado-operations"].classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const operations = tornadoOperations();
+  elements["tornado-alert-detail"].textContent = `${affectedVanWertArea(selectedAlert)} · Until ${formatDateTime(selectedAlert.ends || selectedAlert.expires)} · Take shelter now.`;
+
+  const list = elements["siren-list"];
+  list.replaceChildren();
+  SIRENS.forEach((name) => {
+    const label = makeElement("label", "siren-item");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = Boolean(operations.sirens[name]);
+    const detail = makeElement("span", "siren-item-copy");
+    detail.append(makeElement("strong", "", name), makeElement("small", "", operations.sirens[name] ? `Activated ${formatTime(operations.sirens[name])}` : "Not activated"));
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) operations.sirens[name] = new Date().toISOString();
+      else delete operations.sirens[name];
+      persistIncident();
+      renderTornadoOperations();
+    });
+    label.append(checkbox, detail);
+    list.append(label);
+  });
+
+  const activeRun = currentSirenRun(operations);
+  elements["start-siren-timer"].disabled = Boolean(activeRun);
+  elements["stop-siren-timer"].disabled = !activeRun;
+  updateOperationsClocks();
+  ensureOperationsTimer();
+}
+
+function startSirenTimer() {
+  const operations = tornadoOperations();
+  if (!operations || currentSirenRun(operations)) return;
+  operations.sirenRuns.push({ id: crypto.randomUUID(), startedAt: new Date().toISOString(), endedAt: "" });
+  persistIncident();
+  renderTornadoOperations();
+}
+
+function stopSirenTimer() {
+  const operations = tornadoOperations();
+  const run = operations && currentSirenRun(operations);
+  if (!run) return;
+  run.endedAt = new Date().toISOString();
+  persistIncident();
+  renderTornadoOperations();
+}
+
+function logBroadcast() {
+  const operations = tornadoOperations();
+  if (!operations) return;
+  addLog("EMA Bulletin", operations.broadcasts.length ? "update" : "issued");
 }
 
 function actionLabel(action) {
@@ -434,20 +573,163 @@ function renderChannels() {
 function addLog(channel, action) {
   selectedIncident.logs[channel] ||= [];
   const alertRecord = currentAlertRecord();
+  const at = new Date().toISOString();
+  const id = crypto.randomUUID();
   selectedIncident.logs[channel].push({
-    id: crypto.randomUUID(), action, at: new Date().toISOString(),
+    id, action, at,
     alertKey: selectedAlertKey,
     alertEvent: alertRecord?.event || "General incident",
     alertArea: alertRecord?.area || "Van Wert County",
   });
+  if (selectedIsActiveTornadoWarning() && channel === "EMA Bulletin" && ["issued", "update"].includes(action)) {
+    tornadoOperations().broadcasts.push({ id, at, alertKey: selectedAlertKey });
+  }
   persistIncident();
   renderChannels();
 }
 
 function removeLog(channel, id) {
   selectedIncident.logs[channel] = (selectedIncident.logs[channel] || []).filter((entry) => entry.id !== id);
+  if (channel === "EMA Bulletin") {
+    tornadoOperations().broadcasts = tornadoOperations().broadcasts.filter((entry) => entry.id !== id);
+  }
   persistIncident();
   renderChannels();
+}
+
+function openSpotterActivation() {
+  if (!elements["spotter-panel"].classList.contains("hidden")) {
+    setSpotterExpanded(false);
+    return;
+  }
+  if (!selectedIncident) startIncidentSession({ alerts: activeAlerts, isTraining: exerciseMode });
+  initializeSpotterFromIncident();
+  renderSpotterActivation();
+  setSpotterExpanded(true);
+}
+
+function setSpotterExpanded(expanded) {
+  elements["spotter-panel"].classList.toggle("hidden", !expanded);
+  elements["spotter-activation-button"].setAttribute("aria-expanded", String(expanded));
+  const description = elements["spotter-activation-button"].querySelector("small");
+  if (description) description.textContent = expanded ? "Close activation and reports log" : "Open activation and reports log";
+  if (expanded) requestAnimationFrame(() => elements["spotter-panel"].scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+function spotterTimeControl(record, field) {
+  const group = makeElement("div", "time-entry");
+  const value = makeElement("span", "", record[field] ? formatTime(record[field]) : "—");
+  const button = makeElement("button", "button tiny secondary", record[field] ? "Reset" : "Log now");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    record[field] = record[field] ? "" : new Date().toISOString();
+    persistIncident();
+    renderSpotterActivation();
+  });
+  group.append(value, button);
+  return group;
+}
+
+function renderSpotterActivation() {
+  const spotter = spotterActivation();
+  if (!spotter) return;
+  elements["spotter-severe"].checked = Boolean(spotter.severeThunderstorm);
+  elements["spotter-tornado"].checked = Boolean(spotter.tornado);
+  document.querySelectorAll('input[name="spotter-product"]').forEach((input) => {
+    input.checked = input.value === spotter.nwsProduct;
+  });
+
+  const departmentList = elements["spotter-department-list"];
+  departmentList.replaceChildren();
+  SPOTTER_DEPARTMENTS.forEach((name) => {
+    spotter.departments[name] ||= { activatedAt: "", deactivatedAt: "" };
+    const record = spotter.departments[name];
+    const row = document.createElement("tr");
+    const nameCell = makeElement("th", "spotter-department-name", name);
+    nameCell.scope = "row";
+    row.append(nameCell);
+    ["activatedAt", "deactivatedAt"].forEach((field) => {
+      const cell = document.createElement("td");
+      cell.append(spotterTimeControl(record, field));
+      row.append(cell);
+    });
+    departmentList.append(row);
+  });
+
+  const reportList = elements["spotter-report-list"];
+  reportList.replaceChildren();
+  if (!spotter.reports.length) {
+    const row = document.createElement("tr");
+    const cell = makeElement("td", "empty-table", "No spotter reports recorded. Select “Add report” to begin.");
+    cell.colSpan = 5;
+    row.append(cell);
+    reportList.append(row);
+  }
+  spotter.reports.forEach((report) => {
+    const row = document.createElement("tr");
+    const timeCell = document.createElement("td");
+    const timeGroup = makeElement("div", "report-time-entry");
+    timeGroup.append(makeElement("span", "", formatTime(report.receivedAt)));
+    const nowButton = makeElement("button", "button tiny secondary", "Set now");
+    nowButton.type = "button";
+    nowButton.addEventListener("click", () => {
+      report.receivedAt = new Date().toISOString();
+      persistIncident();
+      renderSpotterActivation();
+    });
+    timeGroup.append(nowButton);
+    timeCell.append(timeGroup);
+
+    const departmentCell = document.createElement("td");
+    const department = document.createElement("select");
+    ["", ...SPOTTER_DEPARTMENTS].forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name || "Select department";
+      department.append(option);
+    });
+    department.value = report.department || "";
+    department.addEventListener("change", () => {
+      report.department = department.value;
+      persistIncident();
+    });
+    departmentCell.append(department);
+
+    const editableCell = (field, placeholder) => {
+      const cell = document.createElement("td");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = report[field] || "";
+      input.placeholder = placeholder;
+      input.addEventListener("input", () => {
+        report[field] = input.value;
+        persistIncident();
+      });
+      cell.append(input);
+      return cell;
+    };
+
+    const removeCell = document.createElement("td");
+    const remove = makeElement("button", "icon-button", "×");
+    remove.type = "button";
+    remove.title = "Remove spotter report";
+    remove.addEventListener("click", () => {
+      spotter.reports = spotter.reports.filter((entry) => entry.id !== report.id);
+      persistIncident();
+      renderSpotterActivation();
+    });
+    removeCell.append(remove);
+    row.append(timeCell, departmentCell, editableCell("location", "Location"), editableCell("reportType", "Damage or weather report"), removeCell);
+    reportList.append(row);
+  });
+}
+
+function addSpotterReport() {
+  const spotter = spotterActivation();
+  if (!spotter) return;
+  spotter.reports.push({ id: crypto.randomUUID(), receivedAt: new Date().toISOString(), department: "", location: "", reportType: "" });
+  persistIncident();
+  renderSpotterActivation();
 }
 
 function addStaff() {
@@ -596,6 +878,39 @@ function populateReport(incident = selectedIncident) {
   entries.forEach((entry) => appendReportRow(logBody, [
     formatDateTime(entry.at), entry.channel, actionLabel(entry.action),
     `${entry.alertEvent || "General incident"}${entry.alertArea ? ` · ${entry.alertArea}` : ""}`,
+  ]));
+
+  const operations = tornadoOperations(incident);
+  const hasTornadoOperations = Object.keys(operations.sirens).length || operations.sirenRuns.length || operations.broadcasts.length;
+  elements["report-tornado-section"].classList.toggle("hidden", !hasTornadoOperations);
+  elements["report-sirens"].textContent = Object.entries(operations.sirens)
+    .map(([name, at]) => `${name} (${formatDateTime(at)})`).join(", ") || "None recorded";
+  elements["report-siren-runtime"].textContent = operations.sirenRuns.length
+    ? `${formatElapsed(completedSirenMilliseconds(operations))} across ${operations.sirenRuns.length} run${operations.sirenRuns.length === 1 ? "" : "s"}`
+    : "Not recorded";
+  const lastBroadcast = operations.broadcasts.at(-1);
+  elements["report-last-broadcast"].textContent = lastBroadcast
+    ? `${formatDateTime(lastBroadcast.at)} (${operations.broadcasts.length} total)` : "Not recorded";
+
+  const spotter = spotterActivation(incident);
+  const trackedDepartments = Object.entries(spotter.departments).filter(([, record]) => record.activatedAt || record.deactivatedAt);
+  const hasSpotterRecord = spotter.severeThunderstorm || spotter.tornado || spotter.nwsProduct || trackedDepartments.length || spotter.reports.length;
+  elements["report-spotter-section"].classList.toggle("hidden", !hasSpotterRecord);
+  const spotterEvents = [spotter.severeThunderstorm ? "Severe Thunderstorm" : "", spotter.tornado ? "Tornado" : ""].filter(Boolean).join(" and ");
+  elements["report-spotter-summary"].textContent = `Event type: ${spotterEvents || "Not recorded"} · NWS product: ${spotter.nwsProduct || "Not recorded"}`;
+  const spotterDepartmentsBody = elements["report-spotter-departments"];
+  spotterDepartmentsBody.replaceChildren();
+  if (!trackedDepartments.length) appendReportRow(spotterDepartmentsBody, ["No department activation times were recorded."], 3);
+  trackedDepartments.forEach(([name, record]) => appendReportRow(spotterDepartmentsBody, [
+    name,
+    record.activatedAt ? formatDateTime(record.activatedAt) : "—",
+    record.deactivatedAt ? formatDateTime(record.deactivatedAt) : "—",
+  ]));
+  const spotterReportsBody = elements["report-spotter-reports"];
+  spotterReportsBody.replaceChildren();
+  if (!spotter.reports.length) appendReportRow(spotterReportsBody, ["No spotter reports were recorded."], 4);
+  spotter.reports.forEach((report) => appendReportRow(spotterReportsBody, [
+    formatDateTime(report.receivedAt), report.department, report.location, report.reportType,
   ]));
 
   const staffBody = elements["report-staff"];
@@ -1004,7 +1319,40 @@ elements["incident-notes"].addEventListener("input", (event) => {
   selectedIncident.notes = event.target.value;
   persistIncident();
 });
+elements["spotter-activation-button"].addEventListener("click", openSpotterActivation);
+elements["collapse-spotter"].addEventListener("click", () => {
+  setSpotterExpanded(false);
+  elements["spotter-activation-button"].focus();
+});
+elements["recent-incidents-button"].addEventListener("click", () => {
+  renderHistory();
+  elements["recent-incidents-dialog"].showModal();
+});
+elements["add-spotter-report"].addEventListener("click", addSpotterReport);
+elements["spotter-severe"].addEventListener("change", (event) => {
+  const spotter = spotterActivation();
+  if (!spotter) return;
+  spotter.severeThunderstorm = event.target.checked;
+  persistIncident();
+});
+elements["spotter-tornado"].addEventListener("change", (event) => {
+  const spotter = spotterActivation();
+  if (!spotter) return;
+  spotter.tornado = event.target.checked;
+  persistIncident();
+});
+document.querySelectorAll('input[name="spotter-product"]').forEach((input) => {
+  input.addEventListener("change", () => {
+    const spotter = spotterActivation();
+    if (!spotter) return;
+    spotter.nwsProduct = input.value;
+    persistIncident();
+  });
+});
 elements["add-staff"].addEventListener("click", addStaff);
+elements["start-siren-timer"].addEventListener("click", startSirenTimer);
+elements["stop-siren-timer"].addEventListener("click", stopSirenTimer);
+elements["log-broadcast"].addEventListener("click", logBroadcast);
 elements["start-incident"].addEventListener("click", () => {
   startIncidentSession({ isTraining: exerciseMode, alerts: activeAlerts });
   const firstAlert = activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).sort((a, b) => alertPriority(a) - alertPriority(b))[0];

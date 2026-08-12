@@ -95,7 +95,7 @@
             <strong id="nixle-count" class="character-count">0 / 120</strong>
           </div>
           <textarea id="nixle-message" rows="4" maxlength="120" spellcheck="true"></textarea>
-          <p class="field-help">Maximum 120 characters, including “VAN WERT, OHIO EMA.” Review before sending.</p>
+          <p class="field-help">Maximum 120 characters. Review before sending.</p>
           <div class="message-actions">
             <button id="copy-nixle" class="button primary" type="button">Copy Nixle text</button>
             <button id="reset-nixle" class="button secondary" type="button">Restore generated text</button>
@@ -142,6 +142,50 @@
       </aside>
     </section>
 
+    <section id="tornado-operations" class="panel tornado-operations hidden" aria-labelledby="tornado-operations-heading">
+      <div class="tornado-alert-banner" role="alert">
+        <span class="tornado-alert-icon" aria-hidden="true">!</span>
+        <div>
+          <p>Immediate action</p>
+          <h2 id="tornado-operations-heading">Tornado Warning in effect</h2>
+          <span id="tornado-alert-detail">Take shelter now.</span>
+        </div>
+      </div>
+
+      <div class="operations-grid">
+        <section class="operation-card" aria-labelledby="siren-heading">
+          <div class="operation-heading">
+            <div>
+              <p class="section-kicker">Activation record</p>
+              <h3 id="siren-heading">Tornado sirens</h3>
+            </div>
+            <span class="save-state">Saved automatically</span>
+          </div>
+          <p class="field-help operation-help">Select each siren as it is activated. The activation time is recorded automatically.</p>
+          <div id="siren-list" class="siren-list"></div>
+        </section>
+
+        <section class="operation-card timer-card" aria-labelledby="siren-timer-heading">
+          <p class="section-kicker">Run time</p>
+          <h3 id="siren-timer-heading">Siren timer</h3>
+          <output id="siren-elapsed" class="operations-clock" aria-live="off">00:00</output>
+          <p id="siren-timer-status" class="timer-status">Not started</p>
+          <div class="timer-actions">
+            <button id="start-siren-timer" class="button danger-button" type="button">Start siren timer</button>
+            <button id="stop-siren-timer" class="button secondary" type="button" disabled>Stop timer</button>
+          </div>
+        </section>
+
+        <section class="operation-card timer-card" aria-labelledby="broadcast-timer-heading">
+          <p class="section-kicker">Radio cadence</p>
+          <h3 id="broadcast-timer-heading">Since last broadcast</h3>
+          <output id="broadcast-elapsed" class="operations-clock" aria-live="off">—</output>
+          <p id="broadcast-timer-status" class="timer-status">No broadcast logged</p>
+          <button id="log-broadcast" class="button primary" type="button">Log broadcast now</button>
+        </section>
+      </div>
+    </section>
+
     <section id="channel-section" class="panel hidden" aria-labelledby="channel-heading">
       <div class="section-heading">
         <div>
@@ -170,15 +214,66 @@
       </div>
     </section>
 
-    <section class="panel history-panel" aria-labelledby="history-heading">
+    <section id="spotter-panel" class="panel spotter-panel hidden" aria-labelledby="spotter-panel-heading">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">Stored on this device</p>
-          <h2 id="history-heading">Recent incidents</h2>
+          <p class="section-kicker">Operational record</p>
+          <h2 id="spotter-panel-heading">Spotter activation</h2>
         </div>
-        <button id="export-records" class="button compact secondary" type="button">Export JSON</button>
+        <button id="collapse-spotter" class="button compact secondary" type="button">Close spotter log</button>
       </div>
-      <div id="incident-history" class="incident-history"></div>
+      <p class="section-intro">Activation times and reports are saved automatically with the current incident.</p>
+
+      <section class="spotter-section" aria-labelledby="spotter-operational-heading">
+        <h3 id="spotter-operational-heading">Operational information</h3>
+        <div class="spotter-operational-grid">
+          <fieldset>
+            <legend>Event type</legend>
+            <label class="choice-label"><input id="spotter-severe" type="checkbox"> Severe Thunderstorm</label>
+            <label class="choice-label"><input id="spotter-tornado" type="checkbox"> Tornado</label>
+          </fieldset>
+          <fieldset>
+            <legend>NWS product issued</legend>
+            <label class="choice-label"><input type="radio" name="spotter-product" value="Watch"> Watch</label>
+            <label class="choice-label"><input type="radio" name="spotter-product" value="Warning"> Warning</label>
+            <label class="choice-label"><input type="radio" name="spotter-product" value="Both"> Both</label>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="spotter-section" aria-labelledby="spotter-tracking-heading">
+        <h3 id="spotter-tracking-heading">Spotter activation tracking</h3>
+        <div class="table-scroll">
+          <table class="staff-table spotter-tracking-table">
+            <thead><tr><th>Department</th><th>Time activated</th><th>Time deactivated</th></tr></thead>
+            <tbody id="spotter-department-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="spotter-section" aria-labelledby="spotter-reports-heading">
+        <div class="spotter-section-heading">
+          <h3 id="spotter-reports-heading">Spotter reports log</h3>
+          <button id="add-spotter-report" class="button compact secondary" type="button">Add report</button>
+        </div>
+        <div class="table-scroll">
+          <table class="staff-table spotter-reports-table">
+            <thead><tr><th>Time received</th><th>Reporting department</th><th>Location</th><th>Report type</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
+            <tbody id="spotter-report-list"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="bottom-actions" aria-label="Additional incident tools">
+      <button id="spotter-activation-button" class="bottom-action-button" type="button" aria-controls="spotter-panel" aria-expanded="false">
+        <span class="bottom-action-icon" aria-hidden="true">◎</span>
+        <span><strong>Spotter activation</strong><small>Open activation and reports log</small></span>
+      </button>
+      <button id="recent-incidents-button" class="bottom-action-button" type="button">
+        <span class="bottom-action-icon" aria-hidden="true">↶</span>
+        <span><strong>Recent incidents</strong><small>Review saved reports and activity</small></span>
+      </button>
     </section>
   </main>
 
@@ -243,6 +338,22 @@
     </div>
   </dialog>
 
+  <dialog id="recent-incidents-dialog" class="app-dialog recent-incidents-dialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="section-kicker">Stored on this device</p>
+        <h2 id="history-heading">Recent incidents</h2>
+      </div>
+      <button class="icon-button dialog-close" type="button" data-close-dialog="recent-incidents-dialog" aria-label="Close recent incidents">×</button>
+    </div>
+    <p class="dialog-note">Open a saved incident to review or print its complete activity report.</p>
+    <div id="incident-history" class="incident-history recent-incidents-list"></div>
+    <div class="dialog-actions">
+      <button id="export-records" class="button secondary" type="button">Export JSON</button>
+      <button class="button primary" type="button" data-close-dialog="recent-incidents-dialog">Done</button>
+    </div>
+  </dialog>
+
   <dialog id="report-dialog" class="app-dialog report-dialog">
     <article id="completed-report" class="completed-report">
       <header class="report-header">
@@ -273,6 +384,29 @@
         <table class="report-table">
           <thead><tr><th>Date and time</th><th>Channel</th><th>Action</th><th>Alert</th></tr></thead>
           <tbody id="report-log"></tbody>
+        </table>
+      </section>
+
+      <section id="report-tornado-section" class="report-section hidden">
+        <h3>Tornado siren operations</h3>
+        <dl class="report-operation-summary">
+          <div><dt>Sirens activated</dt><dd id="report-sirens">None recorded</dd></div>
+          <div><dt>Siren run time</dt><dd id="report-siren-runtime">Not recorded</dd></div>
+          <div><dt>Last broadcast</dt><dd id="report-last-broadcast">Not recorded</dd></div>
+        </dl>
+      </section>
+
+      <section id="report-spotter-section" class="report-section hidden">
+        <h3>Spotter activation</h3>
+        <p id="report-spotter-summary" class="report-alert-meta"></p>
+        <table class="report-table">
+          <thead><tr><th>Department</th><th>Activated</th><th>Deactivated</th></tr></thead>
+          <tbody id="report-spotter-departments"></tbody>
+        </table>
+        <h4 class="report-subheading">Spotter reports</h4>
+        <table class="report-table">
+          <thead><tr><th>Time received</th><th>Department</th><th>Location</th><th>Report type</th></tr></thead>
+          <tbody id="report-spotter-reports"></tbody>
         </table>
       </section>
 

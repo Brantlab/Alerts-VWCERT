@@ -77,6 +77,16 @@ export function formatDateTime(value) {
   }).format(date);
 }
 
+export function formatElapsed(milliseconds) {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return "00:00";
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts = [minutes, seconds].map((value) => String(value).padStart(2, "0"));
+  return hours ? `${String(hours).padStart(2, "0")}:${parts.join(":")}` : parts.join(":");
+}
+
 export function cleanText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -140,7 +150,7 @@ function fitNixle(core, suffixes) {
 }
 
 export function generateNixleMessage(alert) {
-  const prefix = "VAN WERT, OHIO EMA: ";
+  const prefix = "";
   const labels = {
     "Severe Thunderstorm Watch": "Severe T-storm WATCH",
     "Tornado Watch": "TORNADO WATCH",
@@ -319,6 +329,12 @@ function expirationValue(alert) {
   return alert.ends || getParameter(alert, "eventEndingTime") || alert.expires;
 }
 
+function wrapRadioMessage(message) {
+  const introduction = "This is the Van Wert County Emergency Management Agency with a special weather statement.";
+  const signoff = "Authority of the National Weather Service. This is the Van Wert County EMA KNM906.";
+  return `${introduction} ${message} ${signoff}`;
+}
+
 export function generateRadioMessage(alert) {
   const event = alert.event || "weather alert";
   const area = affectedVanWertArea(alert);
@@ -326,11 +342,11 @@ export function generateRadioMessage(alert) {
   const office = officeName(alert);
 
   if (isCancellation(alert)) {
-    return `The National Weather Service in ${office} has cancelled the ${event} for ${area}. The warning is no longer in effect. Again, the ${event} for ${area} has been cancelled.`;
+    return wrapRadioMessage(`The National Weather Service in ${office} has cancelled the ${event} for ${area}. The warning is no longer in effect. Again, the ${event} for ${area} has been cancelled.`);
   }
 
   if (isExpiration(alert)) {
-    return `The National Weather Service in ${office} reports that the ${event} for ${area} is expiring. The warning is no longer in effect. Again, the ${event} for ${area} has expired.`;
+    return wrapRadioMessage(`The National Weather Service in ${office} reports that the ${event} for ${area} is expiring. The warning is no longer in effect. Again, the ${event} for ${area} has expired.`);
   }
 
   const start = `The National Weather Service in ${office} ${actionPhrase(alert)} a ${event} for ${area} until ${until}.`;
@@ -340,7 +356,7 @@ export function generateRadioMessage(alert) {
     const meaning = event === "Tornado Watch"
       ? "Conditions are favorable for tornadoes and severe thunderstorms to develop. Be prepared to move to a place of safety if a warning is issued."
       : "Conditions are favorable for severe thunderstorms to develop, with damaging winds and large hail possible. Be prepared to take protective action if a warning is issued.";
-    return `${start} ${meaning} ${again}`;
+    return wrapRadioMessage(`${start} ${meaning} ${again}`);
   }
 
   const hazard = hazards(alert);
@@ -351,11 +367,11 @@ export function generateRadioMessage(alert) {
   if (event === "Tornado Warning") {
     const source = tornadoSourceSentence(alert);
     const instruction = cleanText(alert.instruction) || "Move to an interior room on the lowest floor of a sturdy building, away from windows.";
-    return [start, source, locationSentence, "A Tornado Warning means a tornado is occurring or may occur soon.", instruction, again].filter(Boolean).join(" ");
+    return wrapRadioMessage([start, source, locationSentence, "A Tornado Warning means a tornado is occurring or may occur soon.", instruction, again].filter(Boolean).join(" "));
   }
 
   const instruction = cleanText(alert.instruction) || "Move indoors to an interior room on the lowest floor of a sturdy building.";
-  return [start, hazardSentence, locationSentence, "A Severe Thunderstorm Warning means severe weather is occurring or imminent.", instruction, again].filter(Boolean).join(" ");
+  return wrapRadioMessage([start, hazardSentence, locationSentence, "A Severe Thunderstorm Warning means severe weather is occurring or imminent.", instruction, again].filter(Boolean).join(" "));
 }
 
 export function channelsFor(alert) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "vw-alert-desk-v9";
+const CACHE_NAME = "vw-alert-desk-v14";
 const APP_SHELL = ["./", "./css/app.css", "./js/app.js", "./js/alerts.js", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {

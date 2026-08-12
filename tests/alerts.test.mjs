@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
 import {
+  SUPPORTED_EVENTS,
   alertPalette,
   affectedVanWertArea,
   extractLocations,
   generateFacebookMessage,
   generateNixleMessage,
   generateRadioMessage,
+  formatElapsed,
   getSeriesId,
   hazards,
   isCancellation,
   threatsFor,
 } from "../static/js/alerts.js";
+
+assert.ok(SUPPORTED_EVENTS.includes("Tornado Warning"));
+assert.equal(formatElapsed(0), "00:00");
+assert.equal(formatElapsed(65_000), "01:05");
+assert.equal(formatElapsed(3_665_000), "01:01:05");
 
 const severe = {
   id: "sample",
@@ -34,6 +41,8 @@ assert.equal(hazards(severe), "wind gusts up to 60 mph and 1-inch hail");
 assert.equal(extractLocations(severe.description), "Van Wert, Ohio City, Middle Point, and Wren.");
 assert.match(generateRadioMessage(severe), /southern Van Wert County until 10:30 PM EDT/);
 assert.match(generateRadioMessage(severe), /wind gusts up to 60 mph and 1-inch hail/);
+assert.match(generateRadioMessage(severe), /^This is the Van Wert County Emergency Management Agency with a special weather statement\./);
+assert.match(generateRadioMessage(severe), /Authority of the National Weather Service\. This is the Van Wert County EMA KNM906\.$/);
 
 const cancelled = {
   ...severe,
@@ -66,7 +75,7 @@ assert.deepEqual(threatsFor({ event: "Tornado Watch", parameters: {} }).map((thr
 
 const nixleSevere = generateNixleMessage(severe);
 assert.ok(nixleSevere.length <= 120, `Nixle severe warning is ${nixleSevere.length} characters`);
-assert.match(nixleSevere, /^VAN WERT, OHIO EMA:/);
+assert.doesNotMatch(nixleSevere, /VAN WERT, OHIO EMA:/);
 assert.match(nixleSevere, /S Van Wert County until 10:30 PM/);
 assert.match(nixleSevere, /Take shelter/);
 
