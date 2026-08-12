@@ -20,6 +20,7 @@ const API_URL = "https://api.weather.gov/alerts/active?zone=OHC161";
 const COUNTY_URL = "https://api.weather.gov/zones/county/OHC161";
 const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
+const ALERT_SOUND_KEY = "vwcert-alert-sound-v1";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
 const SIREN_DURATION = 3 * 60_000;
@@ -43,6 +44,9 @@ let countyGeometry = null;
 let reportIncident = null;
 let exerciseMode = false;
 let operationsTimer = null;
+let alertSoundEnabled = localStorage.getItem(ALERT_SOUND_KEY) === "true";
+let alertAudioContext = null;
+let knownAlertSeries = null;
 
 const trainingPolygons = {
   southeast: { area: "southeastern", points: [[-84.62, 40.84], [-84.34, 40.83], [-84.35, 40.67], [-84.57, 40.69]] },
@@ -221,7 +225,74 @@ function setIncidentControls(active) {
   elements["start-incident"].classList.toggle("hidden", active);
   elements["complete-incident"].classList.toggle("hidden", !active);
   elements["report-button"].disabled = !active;
-  elements["load-training"].disabled = active;
+  elements["load-training"].disabled = active && !selectedIncident?.isTraining;
+}
+
+function getAlertAudioContext() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return null;
+  alertAudioContext ||= new AudioContext();
+  return alertAudioContext;
+}
+
+async function playAlertSound() {
+  if (!alertSoundEnabled) return;
+  const context = getAlertAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch {
+      elements["sound-status"].textContent = "Alert sound is waiting for an operator click before it can play.";
+      return;
+    }
+  }
+  const start = context.currentTime;
+  [0, .24, .48].forEach((offset, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = index === 1 ? 660 : 880;
+    gain.gain.setValueAtTime(0.0001, start + offset);
+    gain.gain.exponentialRampToValueAtTime(.18, start + offset + .02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + .18);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(start + offset);
+    oscillator.stop(start + offset + .2);
+  });
+}
+
+function renderAlertSoundControl() {
+  elements["toggle-alert-sound"].textContent = `Alert sound: ${alertSoundEnabled ? "On" : "Off"}`;
+  elements["toggle-alert-sound"].setAttribute("aria-pressed", String(alertSoundEnabled));
+  elements["toggle-alert-sound"].classList.toggle("enabled", alertSoundEnabled);
+}
+
+async function toggleAlertSound() {
+  alertSoundEnabled = !alertSoundEnabled;
+  localStorage.setItem(ALERT_SOUND_KEY, String(alertSoundEnabled));
+  renderAlertSoundControl();
+  if (alertSoundEnabled) {
+    elements["sound-status"].textContent = "Alert sound enabled. Playing test chime.";
+    await playAlertSound();
+  } else {
+    elements["sound-status"].textContent = "Alert sound disabled.";
+  }
+}
+
+function announceNewAlerts(alerts) {
+  const current = new Set(alerts
+    .filter((alert) => SUPPORTED_EVENTS.includes(alert.event) && !["cancel", "expire"].includes(eventKind(alert)))
+    .map((alert) => getSeriesId(alert)));
+  if (knownAlertSeries === null) {
+    knownAlertSeries = current;
+    return;
+  }
+  const newSeries = [...current].filter((series) => !knownAlertSeries.has(series));
+  current.forEach((series) => knownAlertSeries.add(series));
+  if (!newSeries.length) return;
+  elements["sound-status"].textContent = `${newSeries.length} new NWS alert${newSeries.length === 1 ? "" : "s"} received.`;
+  playAlertSound();
 }
 
 function startIncidentSession({ isTraining = false, alerts = activeAlerts } = {}) {
@@ -322,6 +393,7 @@ async function fetchAlerts({ quiet = false } = {}) {
     const data = await response.json();
     if (exerciseMode) return;
     activeAlerts = (data.features || []).map((feature) => ({ ...feature.properties, geometry: feature.geometry, id: feature.id, "@id": feature.id }));
+    announceNewAlerts(activeAlerts);
     if (selectedIncident && !selectedIncident.isTraining) {
       activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).forEach((alert) => addAlertToIncident(alert, false));
       persistIncident();
@@ -344,9 +416,34 @@ async function fetchAlerts({ quiet = false } = {}) {
   }
 }
 
+function setTrainingFeedState() {
+  exerciseMode = true;
+  elements["refresh-alerts"].disabled = true;
+  elements["return-live"].classList.remove("hidden");
+  elements["feed-dot"].className = "status-dot checking";
+  elements["feed-status"].textContent = "TRAINING EXERCISE";
+  elements["last-checked"].textContent = "Live NWS alerts are temporarily hidden";
+  elements["feed-error"].classList.add("hidden");
+}
+
+function generateTrainingAlert() {
+  if (selectedIncident && !selectedIncident.isTraining) return;
+  const alert = { ...buildTrainingAlert(elements["training-event"].value, elements["training-polygon"].value), isTraining: true };
+  if (!exerciseMode) {
+    activeAlerts = [];
+    selectedAlert = null;
+    trainingMode = false;
+  }
+  setTrainingFeedState();
+  activeAlerts.push(alert);
+  elements["training-dialog"].close();
+  selectAlert(alert, true);
+  if (alertSoundEnabled) playAlertSound();
+}
+
 function startMultiAlertExercise() {
   if (selectedIncident) return;
-  exerciseMode = true;
+  setTrainingFeedState();
   activeAlerts = [
     buildTrainingAlert("Severe Thunderstorm Watch", "full"),
     buildTrainingAlert("Tornado Watch", "diagonal"),
@@ -360,12 +457,6 @@ function startMultiAlertExercise() {
   elements["staffing-section"].classList.add("hidden");
   setStaffingExpanded(false);
   setSpotterExpanded(false);
-  elements["refresh-alerts"].disabled = true;
-  elements["return-live"].classList.remove("hidden");
-  elements["feed-dot"].className = "status-dot checking";
-  elements["feed-status"].textContent = "TRAINING EXERCISE";
-  elements["last-checked"].textContent = "Live NWS alerts are temporarily hidden";
-  elements["feed-error"].classList.add("hidden");
   startIncidentSession({ isTraining: true, alerts: activeAlerts });
   renderAlerts();
 }
@@ -392,6 +483,7 @@ function returnToLiveFeed() {
   elements["report-button"].disabled = true;
   elements["return-live"].classList.add("hidden");
   elements["refresh-alerts"].disabled = false;
+  knownAlertSeries = null;
   setIncidentControls(false);
   renderAlerts();
   fetchAlerts();
@@ -1010,15 +1102,15 @@ function populateReport(incident = selectedIncident) {
   ]));
 
   const operations = tornadoOperations(incident);
-  const individualCycles = Object.values(operations.sirenCycles || {}).flat();
+  const individualCycles = Object.entries(operations.sirenCycles || {})
+    .flatMap(([name, cycles]) => cycles.map((cycle, index) => ({ ...cycle, name, cycleNumber: index + 1 })))
+    .sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt));
   const hasTornadoOperations = Object.keys(operations.sirens).length || operations.sirenRuns.length || individualCycles.length || operations.broadcasts.length;
   elements["report-tornado-section"].classList.toggle("hidden", !hasTornadoOperations);
-  elements["report-sirens"].textContent = SIRENS.filter((name) => operations.sirens[name] || operations.sirenCycles[name]?.length)
-    .map((name) => {
-      const cycles = operations.sirenCycles[name] || [];
-      const at = cycles.at(-1)?.startedAt || operations.sirens[name];
-      return `${name} (${cycles.length || 1} activation${(cycles.length || 1) === 1 ? "" : "s"}; last ${formatDateTime(at)})`;
-    }).join(", ") || "None recorded";
+  const uniqueSirens = new Set(individualCycles.map((cycle) => cycle.name));
+  Object.keys(operations.sirens).forEach((name) => uniqueSirens.add(name));
+  elements["report-sirens"].textContent = uniqueSirens.size
+    ? `${uniqueSirens.size} of ${SIRENS.length}: ${[...uniqueSirens].join(", ")}` : "None recorded";
   const completedCycles = individualCycles.filter((cycle) => cycle.expired).length;
   const activeCycles = individualCycles.filter((cycle) => !cycle.endedAt).length;
   elements["report-siren-runtime"].textContent = individualCycles.length
@@ -1027,6 +1119,17 @@ function populateReport(incident = selectedIncident) {
   const lastBroadcast = operations.broadcasts.at(-1);
   elements["report-last-broadcast"].textContent = lastBroadcast
     ? `${formatDateTime(lastBroadcast.at)} (${operations.broadcasts.length} total)` : "Not recorded";
+  const sirenActivationBody = elements["report-siren-activations"];
+  sirenActivationBody.replaceChildren();
+  if (!individualCycles.length) {
+    appendReportRow(sirenActivationBody, [operations.sirenRuns.length ? "Individual siren timing was not available for this older incident." : "No siren activation cycles were recorded."], 4);
+  }
+  individualCycles.forEach((cycle) => appendReportRow(sirenActivationBody, [
+    cycle.name,
+    String(cycle.cycleNumber),
+    formatDateTime(cycle.startedAt),
+    cycle.endedAt ? `${formatDateTime(cycle.endedAt)}${cycle.expired ? " · Complete" : " · Stopped"}` : "Running",
+  ]));
 
   const spotter = spotterActivation(incident);
   const trackedDepartments = Object.entries(spotter.departments).filter(([, record]) => record.activatedAt || record.deactivatedAt);
@@ -1386,12 +1489,9 @@ function exportRecords() {
 }
 
 elements["refresh-alerts"].addEventListener("click", () => fetchAlerts());
+elements["toggle-alert-sound"].addEventListener("click", toggleAlertSound);
 elements["load-training"].addEventListener("click", () => elements["training-dialog"].showModal());
-elements["start-training"].addEventListener("click", () => {
-  const alert = buildTrainingAlert(elements["training-event"].value, elements["training-polygon"].value);
-  elements["training-dialog"].close();
-  selectAlert(alert, true);
-});
+elements["start-training"].addEventListener("click", generateTrainingAlert);
 elements["start-multi-training"].addEventListener("click", () => {
   elements["training-dialog"].close();
   startMultiAlertExercise();
@@ -1549,6 +1649,10 @@ if (restoredIncidentId) {
   setIncidentControls(false);
 }
 ensureOperationsTimer();
+renderAlertSoundControl();
+document.addEventListener("pointerdown", () => {
+  if (alertSoundEnabled) getAlertAudioContext()?.resume();
+}, { once: true });
 renderHistory();
 fetchAlerts();
 setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);

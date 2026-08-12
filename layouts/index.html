@@ -38,9 +38,11 @@
       </div>
       <div class="status-actions">
         <span id="active-count" class="count-badge">— active</span>
+        <button id="toggle-alert-sound" class="button compact sound-toggle" type="button" aria-pressed="false">Alert sound: Off</button>
         <button id="refresh-alerts" class="button compact" type="button">Refresh now</button>
       </div>
     </section>
+    <div id="sound-status" class="sr-status" aria-live="polite"></div>
 
     <div id="feed-error" class="notice danger hidden" role="alert"></div>
 
@@ -302,7 +304,7 @@
       </div>
       <button class="icon-button dialog-close" type="button" data-close-dialog="training-dialog" aria-label="Close training lab">×</button>
     </div>
-    <p class="dialog-note">Load a clearly marked test alert, then select <strong>Create alert graphic</strong>. Random polygon creates a new shape every time.</p>
+    <p class="dialog-note">Generate a clearly marked test alert, then select <strong>Create alert graphic</strong>. Generate again to add another alert to the same training incident. Random polygon creates a new shape every time.</p>
     <div class="training-form">
       <label>
         <span>Alert type</span>
@@ -328,7 +330,7 @@
       </label>
     </div>
     <div class="dialog-actions">
-      <button id="start-training" class="button primary" type="button">Load training alert</button>
+      <button id="start-training" class="button primary" type="button">Generate new alert</button>
       <button id="start-multi-training" class="button secondary" type="button">Load multi-alert exercise</button>
       <button class="button secondary" type="button" data-close-dialog="training-dialog">Cancel</button>
     </div>
@@ -406,6 +408,10 @@
           <div><dt>Siren cycles</dt><dd id="report-siren-runtime">Not recorded</dd></div>
           <div><dt>Last broadcast</dt><dd id="report-last-broadcast">Not recorded</dd></div>
         </dl>
+        <table class="report-table report-siren-table">
+          <thead><tr><th>Siren</th><th>Cycle</th><th>Time activated</th><th>Time deactivated</th></tr></thead>
+          <tbody id="report-siren-activations"></tbody>
+        </table>
       </section>
 
       <section id="report-spotter-section" class="report-section hidden">
