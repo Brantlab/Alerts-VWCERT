@@ -151,7 +151,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .tornado-alert-banner p { margin: 0 0 .1rem; font-size: .68rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .tornado-alert-banner h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.7rem); text-transform: uppercase; }
 .tornado-alert-banner div > span { display: block; margin-top: .2rem; font-size: .82rem; font-weight: 650; }
-.operations-grid { display: grid; grid-template-columns: minmax(380px, 1.5fr) repeat(2, minmax(200px, .75fr)); gap: 1rem; padding: clamp(1.1rem, 3vw, 1.65rem); }
+.operations-grid { display: grid; grid-template-columns: minmax(380px, 1.5fr) minmax(200px, .75fr); gap: 1rem; padding: clamp(1.1rem, 3vw, 1.65rem); }
 .operation-card { min-width: 0; padding: 1rem; background: #f8faf9; border: 1px solid var(--line); border-radius: 11px; }
 .operation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
 .operation-card h3 { margin: 0; color: var(--navy); font-size: 1.05rem; }
@@ -166,6 +166,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .siren-item-copy small { margin-top: .12rem; color: var(--muted); font-size: .64rem; white-space: nowrap; }
 .timer-card { display: flex; flex-direction: column; align-items: stretch; }
 .operations-clock { display: block; margin: .7rem 0 .25rem; color: var(--navy); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -.05em; }
+.operations-clock.complete { color: var(--green); }
 .timer-status { min-height: 2.6em; margin: 0 0 .8rem; color: var(--muted); font-size: .72rem; line-height: 1.35; }
 .timer-actions { display: grid; gap: .45rem; margin-top: auto; }
 .danger-button { color: white; background: var(--red); border-color: var(--red); }
@@ -174,6 +175,11 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .report-operation-summary div { padding: .65rem; background: #f3f6f7; border-radius: 7px; }
 .report-operation-summary dt { color: var(--muted); font-size: .66rem; font-weight: 850; text-transform: uppercase; }
 .report-operation-summary dd { margin: .25rem 0 0; font-size: .8rem; font-weight: 700; }
+.channel-broadcast-card { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 1.2rem; margin-bottom: 1rem; padding: .85rem 1rem; background: var(--navy); border-radius: 11px; }
+.channel-broadcast-card .section-kicker { color: #aad4dc; }
+.channel-broadcast-card h3 { margin: 0; color: white; font-size: 1rem; }
+.channel-broadcast-card .operations-clock { min-width: 125px; margin: 0; color: white; font-size: 2rem; text-align: center; }
+.channel-broadcast-card .timer-status { min-height: 0; margin: .2rem 0 0; color: #bed0d9; }
 
 .table-scroll { overflow-x: auto; }
 .staff-table { width: 100%; border-collapse: collapse; }
@@ -191,7 +197,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 .history-count { flex: 0 0 auto; color: var(--teal); font-size: .78rem; font-weight: 800; }
 .history-actions { display: flex; align-items: center; gap: .7rem; }
 
-.bottom-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.bottom-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
 .bottom-action-button { display: flex; align-items: center; gap: .85rem; padding: 1rem 1.15rem; color: var(--ink); text-align: left; background: white; border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); }
 .bottom-action-button:hover { background: #f5f9f9; border-color: #8eabb5; }
 .bottom-action-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; color: white; background: var(--teal); border-radius: 50%; font-size: 1.35rem; font-weight: 900; }
@@ -223,6 +229,14 @@ footer p { margin: .3rem; }
 .spotter-panel .spotter-section { margin-left: 0; margin-right: 0; }
 .recent-incidents-dialog { width: min(760px, calc(100% - 2rem)); }
 .recent-incidents-list { margin: 0 1.4rem; }
+.siren-complete-dialog { width: min(560px, calc(100% - 2rem)); }
+.siren-complete-banner { display: flex; align-items: center; gap: .9rem; padding: 1.1rem 1.4rem; color: white; background: var(--red); }
+.siren-complete-banner > span { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; color: var(--red); background: white; border-radius: 50%; font-size: 1.35rem; font-weight: 950; }
+.siren-complete-banner p { margin: 0 0 .15rem; font-size: .68rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.siren-complete-banner h2 { margin: 0; font-size: 1.35rem; }
+.siren-complete-copy { padding: 1.2rem 1.4rem .3rem; }
+.siren-complete-copy p { margin: 0 0 .55rem; line-height: 1.5; }
+.siren-complete-copy strong { color: var(--navy); font-size: .82rem; }
 .spotter-section { margin: 0 1.4rem; padding: 1rem 0; border-top: 1px solid var(--line); }
 .spotter-section h3 { margin: 0 0 .8rem; color: var(--navy); font-size: 1.05rem; }
 .spotter-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -278,7 +292,7 @@ footer p { margin: .3rem; }
   .channel-row { grid-template-columns: 130px 1fr; }
   .log-entries { grid-column: 1 / -1; }
   .operations-grid { grid-template-columns: 1fr 1fr; }
-  .operation-card:first-child { grid-column: 1 / -1; }
+  .bottom-actions { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 650px) {
@@ -292,13 +306,14 @@ footer p { margin: .3rem; }
   .status-actions { justify-content: space-between; }
   .alerts-panel, .message-panel, .operator-panel, #channel-section, #staffing-section, .history-panel { padding: 1rem; }
   .operations-grid { grid-template-columns: 1fr; padding: 1rem; }
-  .operation-card:first-child { grid-column: auto; }
   .siren-list { grid-template-columns: repeat(2, 1fr); }
   .training-banner { margin: -1rem -1rem 1rem; }
   .alert-facts { grid-template-columns: 1fr 1fr; }
   .channel-row { grid-template-columns: 1fr; gap: .7rem; }
   .channel-name { margin: 0; }
   .channel-actions { min-width: 0; }
+  .channel-broadcast-card { grid-template-columns: 1fr auto; }
+  .channel-broadcast-card .button { grid-column: 1 / -1; }
   .log-entries { grid-column: auto; }
   .message-actions .button { width: 100%; }
   .nixle-heading-row { align-items: flex-start; }
@@ -347,7 +362,8 @@ footer p { margin: .3rem; }
   body.report-printing > noscript,
   body.report-printing > #graphic-dialog,
   body.report-printing > #training-dialog,
-  body.report-printing > #recent-incidents-dialog { display: none !important; }
+  body.report-printing > #recent-incidents-dialog,
+  body.report-printing > #siren-complete-dialog { display: none !important; }
   body.report-printing #report-dialog { position: static; display: block; width: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; box-shadow: none; overflow: visible; }
   body.report-printing .completed-report { padding: 0; }
   body.report-printing .report-controls { display: none !important; }

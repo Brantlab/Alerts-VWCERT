@@ -22,8 +22,15 @@ const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
+const SIREN_DURATION = 3 * 60_000;
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
 const SPOTTER_DEPARTMENTS = ["Convoy", "Willshire", "Wren", "Ohio City", "Middle Point", "Scott", "Van Wert", "CERT", "Amateur"];
+const DEFAULT_STAFF = [
+  ["Matt Saunier", "Director"],
+  ["Craig Staley", "Deputy Director"],
+  ["Justin Brant", "Communications"],
+  ["Janis Kelser", "PIO"],
+];
 
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 let activeAlerts = [];
@@ -138,7 +145,7 @@ function createIncident(isTraining = false) {
     isTraining,
     alerts: {},
     logs: {},
-    staff: [],
+    staff: DEFAULT_STAFF.map(([name, position]) => ({ id: crypto.randomUUID(), name, position, timeIn: "", timeOut: "" })),
     tornadoOperations: { sirens: {}, sirenRuns: [], broadcasts: [] },
     spotterActivation: { initialized: false, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] },
   };
@@ -243,6 +250,7 @@ function completeIncidentSession() {
   elements["channel-section"].classList.add("hidden");
   elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setStaffingExpanded(false);
   setSpotterExpanded(false);
   setIncidentControls(false);
   renderAlerts();
@@ -349,6 +357,7 @@ function startMultiAlertExercise() {
   elements["channel-section"].classList.add("hidden");
   elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setStaffingExpanded(false);
   setSpotterExpanded(false);
   elements["refresh-alerts"].disabled = true;
   elements["return-live"].classList.remove("hidden");
@@ -377,6 +386,7 @@ function returnToLiveFeed() {
   elements["channel-section"].classList.add("hidden");
   elements["tornado-operations"].classList.add("hidden");
   elements["staffing-section"].classList.add("hidden");
+  setStaffingExpanded(false);
   setSpotterExpanded(false);
   elements["report-button"].disabled = true;
   elements["return-live"].classList.add("hidden");
@@ -402,7 +412,6 @@ function selectAlert(alert, isTraining) {
 
   elements.workspace.classList.remove("hidden");
   elements["channel-section"].classList.remove("hidden");
-  elements["staffing-section"].classList.remove("hidden");
   elements["training-banner"].classList.toggle("hidden", !isTraining);
   elements["selected-event"].textContent = alert.event;
   elements["selected-status"].textContent = isTraining ? "TRAINING" : alert.messageType || "Alert";
@@ -455,14 +464,44 @@ function completedSirenMilliseconds(operations) {
   }, 0);
 }
 
+function sirenRunMilliseconds(run) {
+  if (!run) return 0;
+  const start = new Date(run.startedAt).getTime();
+  const end = new Date(run.endedAt || Date.now()).getTime();
+  return Math.max(0, end - start);
+}
+
+function expireSirenRun(run) {
+  const completedAt = new Date(new Date(run.startedAt).getTime() + SIREN_DURATION).toISOString();
+  run.endedAt = completedAt;
+  run.expired = true;
+  run.notifiedAt = new Date().toISOString();
+  persistIncident();
+  elements["start-siren-timer"].disabled = false;
+  elements["stop-siren-timer"].disabled = true;
+  elements["siren-complete-time"].textContent = `Completed ${formatDateTime(completedAt)}`;
+  if (!elements["siren-complete-dialog"].open) elements["siren-complete-dialog"].showModal();
+}
+
 function updateOperationsClocks() {
-  if (!selectedIncident || elements["tornado-operations"].classList.contains("hidden")) return;
+  if (!selectedIncident) return;
   const operations = tornadoOperations();
-  const activeRun = currentSirenRun(operations);
-  elements["siren-elapsed"].textContent = formatElapsed(completedSirenMilliseconds(operations));
-  elements["siren-timer-status"].textContent = activeRun
-    ? `Running since ${formatDateTime(activeRun.startedAt)}`
-    : operations.sirenRuns.length ? `${operations.sirenRuns.length} run${operations.sirenRuns.length === 1 ? "" : "s"} recorded` : "Not started";
+  let activeRun = currentSirenRun(operations);
+  if (activeRun && sirenRunMilliseconds(activeRun) >= SIREN_DURATION) {
+    expireSirenRun(activeRun);
+    activeRun = null;
+  }
+  if (!elements["tornado-operations"].classList.contains("hidden")) {
+    const latestRun = operations.sirenRuns.at(-1);
+    const remaining = latestRun ? Math.max(0, SIREN_DURATION - sirenRunMilliseconds(latestRun)) : SIREN_DURATION;
+    const displayRemaining = Math.ceil(remaining / 1000) * 1000;
+    elements["siren-elapsed"].textContent = formatElapsed(displayRemaining);
+    elements["siren-elapsed"].classList.toggle("complete", Boolean(latestRun?.expired));
+    elements["siren-timer-status"].textContent = activeRun
+      ? `Running since ${formatDateTime(activeRun.startedAt)}`
+      : latestRun?.expired ? "Three-minute cycle complete"
+        : latestRun ? `Stopped with ${formatElapsed(displayRemaining)} remaining` : "Ready for a three-minute cycle";
+  }
   const lastBroadcast = operations.broadcasts.at(-1);
   elements["broadcast-elapsed"].textContent = lastBroadcast ? formatElapsed(Date.now() - new Date(lastBroadcast.at).getTime()) : "—";
   elements["broadcast-timer-status"].textContent = lastBroadcast
@@ -568,6 +607,7 @@ function renderChannels() {
     row.append(entries);
     list.append(row);
   });
+  updateOperationsClocks();
 }
 
 function addLog(channel, action) {
@@ -581,7 +621,7 @@ function addLog(channel, action) {
     alertEvent: alertRecord?.event || "General incident",
     alertArea: alertRecord?.area || "Van Wert County",
   });
-  if (selectedIsActiveTornadoWarning() && channel === "EMA Bulletin" && ["issued", "update"].includes(action)) {
+  if (channel === "EMA Bulletin" && ["issued", "update"].includes(action)) {
     tornadoOperations().broadcasts.push({ id, at, alertKey: selectedAlertKey });
   }
   persistIncident();
@@ -603,6 +643,7 @@ function openSpotterActivation() {
     return;
   }
   if (!selectedIncident) startIncidentSession({ alerts: activeAlerts, isTraining: exerciseMode });
+  setStaffingExpanded(false);
   initializeSpotterFromIncident();
   renderSpotterActivation();
   setSpotterExpanded(true);
@@ -736,6 +777,26 @@ function addStaff() {
   selectedIncident.staff.push({ id: crypto.randomUUID(), name: "", position: "", timeIn: "", timeOut: "" });
   persistIncident();
   renderStaff();
+}
+
+function setStaffingExpanded(expanded) {
+  elements["staffing-section"].classList.toggle("hidden", !expanded);
+  elements["office-staffing-button"].setAttribute("aria-expanded", String(expanded));
+  const description = elements["office-staffing-button"].querySelector("small");
+  if (description) description.textContent = expanded ? "Close staff and time log" : "Open staff and time log";
+  if (expanded) requestAnimationFrame(() => elements["staffing-section"].scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+function toggleStaffing() {
+  const opening = elements["staffing-section"].classList.contains("hidden");
+  if (!opening) {
+    setStaffingExpanded(false);
+    return;
+  }
+  if (!selectedIncident) startIncidentSession({ alerts: activeAlerts, isTraining: exerciseMode });
+  setSpotterExpanded(false);
+  renderStaff();
+  setStaffingExpanded(true);
 }
 
 function staffInput(person, field, placeholder) {
@@ -1324,6 +1385,11 @@ elements["collapse-spotter"].addEventListener("click", () => {
   setSpotterExpanded(false);
   elements["spotter-activation-button"].focus();
 });
+elements["office-staffing-button"].addEventListener("click", toggleStaffing);
+elements["collapse-staffing"].addEventListener("click", () => {
+  setStaffingExpanded(false);
+  elements["office-staffing-button"].focus();
+});
 elements["recent-incidents-button"].addEventListener("click", () => {
   renderHistory();
   elements["recent-incidents-dialog"].showModal();
@@ -1403,6 +1469,7 @@ if (restoredIncidentId) {
 } else {
   setIncidentControls(false);
 }
+ensureOperationsTimer();
 renderHistory();
 fetchAlerts();
 setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);

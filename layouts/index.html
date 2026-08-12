@@ -168,7 +168,7 @@
         <section class="operation-card timer-card" aria-labelledby="siren-timer-heading">
           <p class="section-kicker">Run time</p>
           <h3 id="siren-timer-heading">Siren timer</h3>
-          <output id="siren-elapsed" class="operations-clock" aria-live="off">00:00</output>
+          <output id="siren-elapsed" class="operations-clock" aria-live="off">03:00</output>
           <p id="siren-timer-status" class="timer-status">Not started</p>
           <div class="timer-actions">
             <button id="start-siren-timer" class="button danger-button" type="button">Start siren timer</button>
@@ -176,13 +176,6 @@
           </div>
         </section>
 
-        <section class="operation-card timer-card" aria-labelledby="broadcast-timer-heading">
-          <p class="section-kicker">Radio cadence</p>
-          <h3 id="broadcast-timer-heading">Since last broadcast</h3>
-          <output id="broadcast-elapsed" class="operations-clock" aria-live="off">—</output>
-          <p id="broadcast-timer-status" class="timer-status">No broadcast logged</p>
-          <button id="log-broadcast" class="button primary" type="button">Log broadcast now</button>
-        </section>
       </div>
     </section>
 
@@ -195,6 +188,15 @@
         <span class="save-state">Saved automatically</span>
       </div>
       <p class="section-intro">Click the action immediately after completing it. Each click adds a separate, removable entry.</p>
+      <section class="channel-broadcast-card" aria-labelledby="broadcast-timer-heading">
+        <div>
+          <p class="section-kicker">Radio cadence</p>
+          <h3 id="broadcast-timer-heading">Since last broadcast</h3>
+          <p id="broadcast-timer-status" class="timer-status">No broadcast logged</p>
+        </div>
+        <output id="broadcast-elapsed" class="operations-clock" aria-live="off">—</output>
+        <button id="log-broadcast" class="button primary" type="button">Log broadcast now</button>
+      </section>
       <div id="channel-list" class="channel-list"></div>
     </section>
 
@@ -204,7 +206,10 @@
           <p class="section-kicker">Optional</p>
           <h2 id="staffing-heading">Office staffing</h2>
         </div>
-        <button id="add-staff" class="button compact secondary" type="button">Add person</button>
+        <div class="section-actions">
+          <button id="add-staff" class="button compact secondary" type="button">Add person</button>
+          <button id="collapse-staffing" class="button compact secondary" type="button">Close staffing</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table class="staff-table">
@@ -269,6 +274,10 @@
       <button id="spotter-activation-button" class="bottom-action-button" type="button" aria-controls="spotter-panel" aria-expanded="false">
         <span class="bottom-action-icon" aria-hidden="true">◎</span>
         <span><strong>Spotter activation</strong><small>Open activation and reports log</small></span>
+      </button>
+      <button id="office-staffing-button" class="bottom-action-button" type="button" aria-controls="staffing-section" aria-expanded="false">
+        <span class="bottom-action-icon" aria-hidden="true">+</span>
+        <span><strong>Office staffing</strong><small>Open staff and time log</small></span>
       </button>
       <button id="recent-incidents-button" class="bottom-action-button" type="button">
         <span class="bottom-action-icon" aria-hidden="true">↶</span>
@@ -351,6 +360,23 @@
     <div class="dialog-actions">
       <button id="export-records" class="button secondary" type="button">Export JSON</button>
       <button class="button primary" type="button" data-close-dialog="recent-incidents-dialog">Done</button>
+    </div>
+  </dialog>
+
+  <dialog id="siren-complete-dialog" class="app-dialog siren-complete-dialog">
+    <div class="siren-complete-banner" role="alert">
+      <span aria-hidden="true">✓</span>
+      <div>
+        <p>Siren timer</p>
+        <h2>Three-minute cycle complete</h2>
+      </div>
+    </div>
+    <div class="siren-complete-copy">
+      <p>The tornado siren timer has reached zero and the run was stopped automatically.</p>
+      <strong id="siren-complete-time">Completed now</strong>
+    </div>
+    <div class="dialog-actions">
+      <button class="button primary" type="button" data-close-dialog="siren-complete-dialog">Acknowledge</button>
     </div>
   </dialog>
 
