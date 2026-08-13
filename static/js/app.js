@@ -22,6 +22,7 @@ const NATIONAL_ALERTS_URL = "https://api.weather.gov/alerts/active";
 const NATIONAL_CITIES_URL = "https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv";
 const NATIONAL_COUNTIES_URL = "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json";
 const NATIONAL_COUNTY_ZONES_URL = "https://api.weather.gov/zones?type=county&include_geometry=false&limit=5000";
+const SPC_MD_RSS_URL = "https://www.spc.noaa.gov/products/spcmdrss.xml";
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const MAX_HIGHWAY_SEGMENTS = 1000;
 const HIGHWAY_MERGE_DISTANCE_METERS = 400;
@@ -93,6 +94,7 @@ const DEFAULT_STAFF = [
 ];
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 let activeAlerts = [];
+let activeSpcDiscussions = [];
 let selectedAlert = null;
 let selectedAlertKey = null;
 let selectedIncident = null;
@@ -103,10 +105,12 @@ let countyGeometryCache = new Map();
 let countyNameByCode = new Map([[DEFAULT_COUNTY.code, DEFAULT_COUNTY.name]]);
 let countyOptionLabelByCode = new Map([[DEFAULT_COUNTY.code, `${DEFAULT_COUNTY.name} (${DEFAULT_COUNTY.code})`]]);
 let countyAlertLevelByCode = new Map();
+let countySpcDiscussionByCode = new Map();
 let nationalCitiesPromise = null;
 let nationalCountiesPromise = null;
 let nationalCountyZonesPromise = null;
 let nationalMapData = { counties: [], alerts: [], zones: [] };
+let countyOfficeCache = new Map();
 let highwayCache = new Map();
 let nationalMapState = { scale: 1, x: 0, y: 0, dragging: false, pointerId: null, lastX: 0, lastY: 0 };
 let reportIncident = null;
@@ -257,6 +261,102 @@ function pointInRing(point, ring) {
 function pointInGeometry(place, geometry) {
   const point = [place.longitude, place.latitude];
   return geometryRings(geometry).some((ring) => pointInRing(point, ring));
+}
+
+function decodeSpcCoordinate(token) {
+  const digits = String(token || "").replace(/\D/g, "");
+  if (digits.length < 7) return null;
+  const latitude = Number(digits.slice(0, 4)) / 100;
+  const longitudeDigits = digits.slice(4);
+  const longitude = -Number(longitudeDigits) / 100;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return [longitude, latitude];
+}
+
+function spcLatLonGeometry(text) {
+  const match = String(text || "").match(/LAT\.\.\.LON\s+([\s\S]*?)(?:\n\s*\n|MOST PROBABLE|$)/i);
+  if (!match) return null;
+  const points = match[1].split(/\s+/).map(decodeSpcCoordinate).filter(Boolean);
+  if (points.length < 3) return null;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const closed = first[0] === last[0] && first[1] === last[1] ? points : closePolygon(points);
+  return { type: "Polygon", coordinates: [closed] };
+}
+
+function spcSection(text, label) {
+  const stops = [
+    "Areas affected", "Concerning", "Valid", "Probability of Watch Issuance",
+    "SUMMARY", "DISCUSSION", "ATTN...WFO", "LAT...LON", "MOST PROBABLE",
+  ].filter((stop) => stop.toLowerCase() !== label.toLowerCase());
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stopPattern = stops.map((stop) => stop.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pattern = new RegExp(`${escapedLabel}\\.\\.\\.\\s*([\\s\\S]*?)(?=\\n\\s*(?:${stopPattern})|$)`, "i");
+  return cleanSpcText(String(text || "").match(pattern)?.[1] || "");
+}
+
+function cleanSpcText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function parseSpcDiscussionItem(item) {
+  const title = item.querySelector("title")?.textContent?.trim() || "SPC MD";
+  const link = item.querySelector("link")?.textContent?.trim() || "";
+  const description = item.querySelector("description")?.textContent || "";
+  const preText = description.match(/<pre>\s*([\s\S]*?)<\/pre>/i)?.[1] || description;
+  const number = title.match(/\bMD\s+(\d+)/i)?.[1] || link.match(/md(\d+)\.html/i)?.[1] || "";
+  const wfos = [...preText.matchAll(/ATTN\.\.\.WFO\.\.\.([A-Z.\s]+?)\.\.\./gi)]
+    .flatMap((match) => match[1].split(/\.+|\s+/))
+    .map((office) => office.trim())
+    .filter(Boolean);
+  const wind = cleanSpcText(preText.match(/MOST PROBABLE PEAK WIND GUST\.\.\.([^\n]+)/i)?.[1] || "");
+  const hail = cleanSpcText(preText.match(/MOST PROBABLE PEAK HAIL SIZE\.\.\.([^\n]+)/i)?.[1] || "");
+  return {
+    id: `SPC-MD-${number || link}`,
+    number,
+    title,
+    link,
+    pubDate: item.querySelector("pubDate")?.textContent || "",
+    areas: spcSection(preText, "Areas affected"),
+    concerning: spcSection(preText, "Concerning"),
+    valid: cleanSpcText(preText.match(/Valid\s+([^\n]+)/i)?.[1] || ""),
+    probability: cleanSpcText(preText.match(/Probability of Watch Issuance\.\.\.([^\n]+)/i)?.[1] || ""),
+    summary: spcSection(preText, "SUMMARY"),
+    discussion: spcSection(preText, "DISCUSSION"),
+    wfos,
+    wind,
+    hail,
+    geometry: spcLatLonGeometry(preText),
+  };
+}
+
+function countyZoneIntersectsDiscussion(boundary, discussion) {
+  if (!boundary || !discussion?.geometry) return false;
+  const discussionBounds = geometryBounds(discussion.geometry);
+  const countyBounds = geometryBounds(boundary);
+  if (!discussionBounds || !countyBounds || !boundsIntersect(discussionBounds, countyBounds)) return false;
+  const countyCenter = boundsCenter(countyBounds);
+  if (pointInGeometry({ longitude: countyCenter[0], latitude: countyCenter[1] }, discussion.geometry)) return true;
+  return geometryRings(boundary).flat().some(([longitude, latitude]) => pointInGeometry({ longitude, latitude }, discussion.geometry));
+}
+
+async function spcDiscussionCountyMatches(discussions = activeSpcDiscussions) {
+  const matches = new Map();
+  const withGeometry = discussions.filter((discussion) => discussion.geometry);
+  if (!withGeometry.length) return matches;
+  const [zones, counties] = await Promise.all([loadNationalCountyZones(), loadNationalCounties()]);
+  const codeByFips = new Map(zones.map((zone) => [countyFipsFromZoneCode(zone.properties?.id || ""), zone.properties?.id || ""]));
+  counties.forEach((county) => {
+    const code = codeByFips.get(String(county.id || ""));
+    if (!code || matches.has(code)) return;
+    const countyBounds = geometryBounds(county.geometry);
+    if (!countyBounds) return;
+    const candidates = withGeometry.filter((discussion) => boundsIntersect(geometryBounds(discussion.geometry), countyBounds));
+    if (!candidates.length) return;
+    const match = candidates.find((discussion) => countyZoneIntersectsDiscussion(county.geometry, discussion));
+    if (match) matches.set(code, match);
+  });
+  return matches;
 }
 
 function formatPlaceList(names) {
@@ -571,8 +671,10 @@ function updateCountyLabels() {
 
 function updateCountySelectAlertClass() {
   const level = countyAlertLevelByCode.get(selectedCounty.code) || "";
+  const spc = countySpcDiscussionByCode.has(selectedCounty.code);
   elements["county-select"].classList.toggle("warning", level === "warning");
   elements["county-select"].classList.toggle("watch", level === "watch");
+  elements["county-select"].classList.toggle("md", !level && spc);
 }
 
 function countyCodeFromUrl(url) {
@@ -629,6 +731,11 @@ async function loadAlertCountyOptions() {
     activeCountyCodes.add(DEFAULT_COUNTY.code);
   }
 
+  if (!activeSpcDiscussions.length) await fetchSpcDiscussions();
+  countySpcDiscussionByCode = await spcDiscussionCountyMatches();
+  countySpcDiscussionByCode.forEach((discussion, code) => {
+    if (discussion) activeCountyCodes.add(code);
+  });
   activeCountyCodes.add(DEFAULT_COUNTY.code);
   activeCountyCodes.add(selectedCounty.code);
   countyAlertLevelByCode = nextAlertLevels;
@@ -639,15 +746,17 @@ async function loadAlertCountyOptions() {
       name: countyNameByCode.get(code) || code,
       label: countyOptionLabelByCode.get(code) || `${countyNameByCode.get(code) || code} (${code})`,
       level: countyAlertLevelByCode.get(code) || "",
+      spc: countySpcDiscussionByCode.has(code),
     }))
     .sort((a, b) => {
       if (a.code === DEFAULT_COUNTY.code) return -1;
       if (b.code === DEFAULT_COUNTY.code) return 1;
       return a.name.localeCompare(b.name) || a.code.localeCompare(b.code);
     });
-  elements["county-select"].replaceChildren(...options.map(({ code, label, level }) => {
-    const status = level ? `${level === "warning" ? "Warning" : "Watch"} · ` : "";
-    const option = makeElement("option", `county-option ${level}`.trim(), `${status}${label}`);
+  elements["county-select"].replaceChildren(...options.map(({ code, label, level, spc }) => {
+    const status = level ? `${level === "warning" ? "Warning" : "Watch"} · ` : spc ? "SPC MD · " : "";
+    const suffix = spc && level ? " *" : "";
+    const option = makeElement("option", `county-option ${level || (spc ? "md" : "")}`.trim(), `${status}${label}${suffix}`);
     option.value = code;
     if (level === "warning") {
       option.style.backgroundColor = "#fde8eb";
@@ -655,6 +764,9 @@ async function loadAlertCountyOptions() {
     } else if (level === "watch") {
       option.style.backgroundColor = "#fff8d7";
       option.style.color = "#635000";
+    } else if (spc) {
+      option.style.backgroundColor = "#f7f1ff";
+      option.style.color = "#4c2a70";
     }
     return option;
   }));
@@ -667,6 +779,94 @@ function makeElement(tag, className, text) {
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+async function selectedCountyOfficeIds() {
+  if (countyOfficeCache.has(selectedCounty.code)) return countyOfficeCache.get(selectedCounty.code);
+  try {
+    const response = await fetch(countyBoundaryUrl(selectedCounty.code), { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
+    if (!response.ok) throw new Error(`County zone returned ${response.status}`);
+    const data = await response.json();
+    const offices = [
+      ...(data.properties?.cwa || []),
+      data.properties?.gridIdentifier,
+      data.properties?.awipsLocationIdentifier,
+    ].filter(Boolean);
+    countyOfficeCache.set(selectedCounty.code, offices);
+    return offices;
+  } catch {
+    countyOfficeCache.set(selectedCounty.code, []);
+    return [];
+  }
+}
+
+async function discussionMatchesSelectedCounty(discussion) {
+  const offices = await selectedCountyOfficeIds();
+  if (discussion.wfos.some((office) => offices.includes(office))) return true;
+  try {
+    return countyZoneIntersectsDiscussion(await getCountyGeometry(), discussion);
+  } catch {
+    return false;
+  }
+}
+
+async function matchingSpcDiscussions() {
+  const matches = await Promise.all(activeSpcDiscussions.map(async (discussion) => (
+    (await discussionMatchesSelectedCounty(discussion)) ? discussion : null
+  )));
+  return matches.filter(Boolean);
+}
+
+async function renderSpcDiscussions() {
+  const list = elements["spc-md-list"];
+  if (!list) return;
+  list.replaceChildren();
+  if (!activeSpcDiscussions.length) {
+    list.append(makeElement("div", "empty-state compact-empty", "No SPC mesoscale discussions are currently listed."));
+    return;
+  }
+  const matches = new Set((await matchingSpcDiscussions()).map((discussion) => discussion.id));
+  activeSpcDiscussions.forEach((discussion) => {
+    const card = makeElement("article", `spc-md-card ${matches.has(discussion.id) ? "match" : ""}`.trim());
+    const top = makeElement("div", "spc-md-top");
+    top.append(makeElement("strong", "", `MD ${discussion.number || ""}`.trim()));
+    top.append(makeElement("span", "", discussion.valid ? `Valid ${discussion.valid}` : formatTime(discussion.pubDate, true)));
+    card.append(top);
+    const meta = [
+      discussion.areas,
+      discussion.concerning,
+      discussion.probability ? `Watch probability ${discussion.probability}` : "",
+      discussion.wind ? `Wind ${discussion.wind}` : "",
+      discussion.hail ? `Hail ${discussion.hail}` : "",
+    ].filter(Boolean).join(" · ");
+    card.append(makeElement("span", "spc-md-meta", meta || "SPC mesoscale discussion"));
+    card.append(makeElement("span", "spc-md-summary", discussion.summary || "See SPC discussion for details."));
+    if (matches.has(discussion.id)) card.append(makeElement("span", "included-label", "Relevant to selected county"));
+    if (discussion.link) {
+      const link = makeElement("a", "spc-md-link", "Open SPC MD");
+      link.href = discussion.link;
+      link.target = "_blank";
+      link.rel = "noopener";
+      card.append(link);
+    }
+    list.append(card);
+  });
+}
+
+async function fetchSpcDiscussions() {
+  try {
+    const response = await fetch(SPC_MD_RSS_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error(`SPC returned ${response.status}`);
+    const xml = await response.text();
+    const documentXml = new DOMParser().parseFromString(xml, "application/xml");
+    activeSpcDiscussions = [...documentXml.querySelectorAll("item")]
+      .map(parseSpcDiscussionItem)
+      .filter((discussion) => discussion.number || discussion.summary || discussion.geometry)
+      .slice(0, 12);
+  } catch {
+    activeSpcDiscussions = [];
+  }
+  await renderSpcDiscussions();
 }
 
 function affectedArea(alert) {
@@ -1341,6 +1541,7 @@ async function fetchAlerts({ quiet = false } = {}) {
     setFeedState("live", `Last checked ${formatTime(new Date().toISOString())} · ${currentCountyName()}`);
     elements["feed-error"].classList.add("hidden");
     renderAlerts();
+    await fetchSpcDiscussions();
 
     if (selectedAlert && !trainingMode) {
       const matching = activeAlerts.find((alert) => getSeriesId(alert) === selectedAlertKey);
@@ -2461,6 +2662,42 @@ function drawSurroundingCounties(context, counties, project) {
   context.restore();
 }
 
+function drawSpcDiscussionOverlay(context, discussion, project, map) {
+  if (!discussion?.geometry) return false;
+  context.save();
+  context.beginPath();
+  context.rect(map.x, map.y, map.width, map.height);
+  context.clip();
+  drawGeometry(context, discussion.geometry, project, { fill: "rgba(126,75,177,.16)" });
+  context.setLineDash([14, 8]);
+  drawGeometry(context, discussion.geometry, project, { stroke: "#7e4bb1", lineWidth: 5 });
+  context.setLineDash([]);
+
+  const bounds = geometryBounds(discussion.geometry);
+  const [x, y] = bounds ? project(...boundsCenter(bounds)) : [map.x + 18, map.y + 18];
+  const label = [
+    `SPC MD ${discussion.number || ""}`.trim(),
+    discussion.probability ? `Watch ${discussion.probability}` : "",
+    discussion.wind ? `Wind ${discussion.wind}` : "",
+    discussion.hail ? `Hail ${discussion.hail}` : "",
+  ].filter(Boolean).join(" · ");
+  context.font = "800 15px system-ui, sans-serif";
+  const textWidth = Math.min(context.measureText(label).width + 18, map.width - 36);
+  const boxX = Math.max(map.x + 18, Math.min(x - textWidth / 2, map.x + map.width - textWidth - 18));
+  const boxY = Math.max(map.y + 18, Math.min(y - 16, map.y + map.height - 42));
+  context.fillStyle = "rgba(255,255,255,.9)";
+  context.fillRect(boxX, boxY, textWidth, 30);
+  context.strokeStyle = "#7e4bb1";
+  context.lineWidth = 2;
+  context.strokeRect(boxX, boxY, textWidth, 30);
+  context.fillStyle = "#342347";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(label.length > 90 ? `${label.slice(0, 87)}...` : label, boxX + textWidth / 2, boxY + 16);
+  context.restore();
+  return true;
+}
+
 async function renderAlertGraphic({ regional = false } = {}) {
   if (!selectedAlert) return;
   const button = regional ? elements["create-regional-graphic"] : elements["create-graphic"];
@@ -2476,6 +2713,8 @@ async function renderAlertGraphic({ regional = false } = {}) {
     }
     if (!boundary) throw new Error("No county boundary or alert geometry available");
     const surroundingCounties = regional ? await surroundingCountiesForBoundary(boundary) : [];
+    const matchingDiscussions = await matchingSpcDiscussions();
+    const spcDiscussion = matchingDiscussions.find((discussion) => discussion.geometry);
     const canvas = elements["alert-graphic"];
     const context = canvas.getContext("2d");
     const width = canvas.width;
@@ -2497,7 +2736,7 @@ async function renderAlertGraphic({ regional = false } = {}) {
     context.textBaseline = "middle";
     context.fillText(`${trainingMode ? "TRAINING · " : ""}${selectedAlert.event}`, width / 2, titleHeight / 2);
 
-    const bounds = combineBounds(boundary, selectedAlert.geometry, ...surroundingCounties.map((county) => county.geometry));
+    const bounds = combineBounds(boundary, selectedAlert.geometry, spcDiscussion?.geometry, ...surroundingCounties.map((county) => county.geometry));
     if (!bounds) throw new Error("No drawable geometry available");
     const map = { x: sidebarWidth, y: titleHeight, width: width - sidebarWidth, height: height - titleHeight };
     const padding = 48;
@@ -2525,6 +2764,7 @@ async function renderAlertGraphic({ regional = false } = {}) {
     const roadLabelBoxes = drawHighways(context, highways, project, map);
     context.restore();
     drawGeometry(context, selectedAlert.geometry || boundary, project, { stroke: eventColor, lineWidth: 5 });
+    const drewSpcDiscussion = drawSpcDiscussionOverlay(context, spcDiscussion, project, map);
     const highwayStatus = highwayResult.truncated
       ? `Added ${highways.length} of ${highwayResult.total} major highway segments; some breaks may remain because the result was capped.`
       : highways.length
@@ -2535,6 +2775,11 @@ async function renderAlertGraphic({ regional = false } = {}) {
         ? `Included ${surroundingCounties.length} surrounding count${surroundingCounties.length === 1 ? "y" : "ies"}.`
         : "No surrounding counties were available for this regional graphic."
       : "";
+    const spcStatus = drewSpcDiscussion
+      ? `Added SPC MD ${spcDiscussion.number || ""}${spcDiscussion.probability ? ` (${spcDiscussion.probability} watch probability)` : ""}.`
+      : matchingDiscussions.length
+        ? "A matching SPC MD was found, but no drawable polygon was available."
+        : "No matching SPC MD for this county.";
 
     const places = await placesForGraphic(selectedAlert, bounds);
     const placeStatus = elements["graphic-status"].textContent;
@@ -2548,7 +2793,7 @@ async function renderAlertGraphic({ regional = false } = {}) {
       context.strokeText(currentCountyName(), x, y);
       context.fillText(currentCountyName(), x, y);
     }
-    setGraphicStatus(`${regionalStatus} ${placeStatus}${places.length && placedCount < places.length ? ` Drew ${placedCount} labels to avoid overlaps.` : ""} ${highwayStatus}`.trim());
+    setGraphicStatus(`${regionalStatus} ${spcStatus} ${placeStatus}${places.length && placedCount < places.length ? ` Drew ${placedCount} labels to avoid overlaps.` : ""} ${highwayStatus}`.trim());
     context.restore();
 
     context.textAlign = "left";
@@ -2741,7 +2986,10 @@ elements["national-map-svg"].addEventListener("pointercancel", () => {
   elements["national-map-svg"].classList.remove("dragging");
   nationalMapState = { ...nationalMapState, dragging: false, pointerId: null };
 });
-elements["refresh-alerts"].addEventListener("click", () => fetchAlerts());
+elements["refresh-alerts"].addEventListener("click", async () => {
+  await loadAlertCountyOptions();
+  await fetchAlerts();
+});
 elements["toggle-alert-sound"].addEventListener("click", toggleAlertSound);
 elements["load-training"].addEventListener("click", () => elements["training-dialog"].showModal());
 elements["start-training"].addEventListener("click", generateTrainingAlert);
