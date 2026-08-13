@@ -1,7 +1,7 @@
 import {
   SUPPORTED_EVENTS,
   alertPalette,
-  affectedVanWertArea,
+  affectedCountyArea,
   channelsFor,
   eventKind,
   formatDateTime,
@@ -16,8 +16,8 @@ import {
   threatsFor,
 } from "./alerts.js";
 
-const API_URL = "https://api.weather.gov/alerts/active?zone=OHC161";
-const COUNTY_URL = "https://api.weather.gov/zones/county/OHC161";
+const DEFAULT_COUNTY = { code: "OHC161", name: "Van Wert County" };
+const NATIONAL_ALERTS_URL = "https://api.weather.gov/alerts/active";
 const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const ALERT_SOUND_KEY = "vwcert-alert-sound-v1";
@@ -40,7 +40,10 @@ let selectedAlertKey = null;
 let selectedIncident = null;
 let trainingMode = false;
 let installPrompt = null;
-let countyGeometry = null;
+let selectedCounty = { ...DEFAULT_COUNTY };
+let countyGeometryCache = new Map();
+let countyNameByCode = new Map([[DEFAULT_COUNTY.code, DEFAULT_COUNTY.name]]);
+let countyOptionLabelByCode = new Map([[DEFAULT_COUNTY.code, `${DEFAULT_COUNTY.name} (${DEFAULT_COUNTY.code})`]]);
 let reportIncident = null;
 let exerciseMode = false;
 let operationsTimer = null;
@@ -57,6 +60,22 @@ const trainingPolygons = {
   diagonal: { area: "", points: [[-84.88, 40.98], [-84.80, 41.05], [-84.34, 40.73], [-84.42, 40.67]] },
   full: { area: "", points: [[-84.81, 41.01], [-84.39, 41.01], [-84.39, 40.72], [-84.81, 40.72]] },
 };
+
+function countyAlertUrl(code = selectedCounty.code) {
+  return `https://api.weather.gov/alerts/active?zone=${encodeURIComponent(code)}`;
+}
+
+function countyBoundaryUrl(code = selectedCounty.code) {
+  return `https://api.weather.gov/zones/county/${encodeURIComponent(code)}`;
+}
+
+function countyDisplay() {
+  return `${selectedCounty.name} · ${selectedCounty.code}`;
+}
+
+function currentCountyName() {
+  return selectedCounty.name;
+}
 
 function closePolygon(points) {
   return [...points, points[0]];
@@ -78,16 +97,61 @@ function randomTrainingPolygon() {
   ];
 }
 
-function buildTrainingAlert(event, scenarioName) {
+function geometryBounds(geometry) {
+  const points = geometryRings(geometry).flat();
+  if (!points.length) return null;
+  const longitudes = points.map((point) => point[0]);
+  const latitudes = points.map((point) => point[1]);
+  return {
+    minLon: Math.min(...longitudes), maxLon: Math.max(...longitudes),
+    minLat: Math.min(...latitudes), maxLat: Math.max(...latitudes),
+  };
+}
+
+function trainingPolygonFromBoundary(scenarioName, boundary) {
+  const bounds = geometryBounds(boundary);
+  if (!bounds) return null;
+  const { minLon, maxLon, minLat, maxLat } = bounds;
+  const lon = (ratio) => minLon + (maxLon - minLon) * ratio;
+  const lat = (ratio) => minLat + (maxLat - minLat) * ratio;
+  const shapes = {
+    southeast: [[lon(.48), lat(.55)], [lon(.96), lat(.55)], [lon(.96), lat(.04)], [lon(.58), lat(.06)]],
+    southwest: [[lon(.04), lat(.56)], [lon(.52), lat(.55)], [lon(.42), lat(.06)], [lon(.04), lat(.04)]],
+    northeast: [[lon(.50), lat(.96)], [lon(.96), lat(.95)], [lon(.96), lat(.48)], [lon(.58), lat(.50)]],
+    northwest: [[lon(.04), lat(.95)], [lon(.52), lat(.96)], [lon(.42), lat(.50)], [lon(.04), lat(.48)]],
+    center: [[lon(.08), lat(.62)], [lon(.92), lat(.58)], [lon(.92), lat(.42)], [lon(.08), lat(.46)]],
+    diagonal: [[lon(.05), lat(.88)], [lon(.14), lat(.98)], [lon(.95), lat(.12)], [lon(.86), lat(.02)]],
+    full: [[lon(.05), lat(.95)], [lon(.95), lat(.95)], [lon(.95), lat(.05)], [lon(.05), lat(.05)]],
+  };
+  if (scenarioName !== "random") return shapes[scenarioName] || shapes.full;
+  const centerLon = lon(.25 + Math.random() * .5);
+  const centerLat = lat(.25 + Math.random() * .5);
+  const angle = Math.random() * Math.PI;
+  const halfLength = (maxLon - minLon) * (.18 + Math.random() * .12);
+  const halfWidth = (maxLat - minLat) * (.08 + Math.random() * .06);
+  const along = [Math.cos(angle) * halfLength, Math.sin(angle) * halfLength];
+  const across = [-Math.sin(angle) * halfWidth, Math.cos(angle) * halfWidth];
+  return [
+    [centerLon - along[0] - across[0], centerLat - along[1] - across[1]],
+    [centerLon + along[0] - across[0], centerLat + along[1] - across[1]],
+    [centerLon + along[0] + across[0], centerLat + along[1] + across[1]],
+    [centerLon - along[0] + across[0], centerLat - along[1] + across[1]],
+  ];
+}
+
+function buildTrainingAlert(event, scenarioName, county = selectedCounty, boundary = null) {
   const scenario = trainingPolygons[scenarioName] || { area: "", points: randomTrainingPolygon() };
-  const points = scenarioName === "random" ? randomTrainingPolygon() : scenario.points;
-  const area = scenario.area ? `${scenario.area} Van Wert County` : "Van Wert County";
+  const boundaryPoints = trainingPolygonFromBoundary(scenarioName, boundary);
+  const points = boundaryPoints || (scenarioName === "random" ? randomTrainingPolygon() : scenario.points);
+  const area = scenario.area ? `${scenario.area} ${county.name}` : county.name;
   const isTornado = event.startsWith("Tornado");
   const isWatch = event.endsWith("Watch");
   const sent = new Date();
   const ends = new Date(sent.getTime() + (isWatch ? 3 * 60 : 45) * 60_000);
   return {
     id: `training-${event.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+    countyCode: county.code,
+    countyName: county.name,
     event,
     status: "Test",
     messageType: "Alert",
@@ -99,7 +163,7 @@ function buildTrainingAlert(event, scenarioName) {
     expires: ends.toISOString(),
     ends: ends.toISOString(),
     headline: `TRAINING: ${event} for ${area}`,
-    description: `TRAINING EXERCISE. The National Weather Service has issued a ${event} for ${area}.\n\nHAZARD...${isTornado ? "Tornado" : "60 mph wind gusts and quarter size hail"}.\n\nSOURCE...Radar indicated.\n\nLocations impacted include...\nVan Wert, Convoy, Ohio City, Middle Point, Willshire, and Wren.`,
+    description: `TRAINING EXERCISE. The National Weather Service has issued a ${event} for ${area}.\n\nHAZARD...${isTornado ? "Tornado" : "60 mph wind gusts and quarter size hail"}.\n\nSOURCE...Radar indicated.\n\nLocations impacted include...\nCommunities in and near ${county.name}.`,
     instruction: isTornado
       ? "Move to an interior room on the lowest floor of a sturdy building, away from windows."
       : "For your protection move to an interior room on the lowest floor of a building.",
@@ -141,7 +205,9 @@ function createIncident(isTraining = false) {
   return {
     seriesId: `INCIDENT-${openedAt.replace(/[-:.TZ]/g, "")}-${crypto.randomUUID().slice(0, 6)}`,
     event: "Weather Incident",
-    area: "Van Wert County",
+    area: currentCountyName(),
+    countyCode: selectedCounty.code,
+    countyName: currentCountyName(),
     openedAt,
     updatedAt: openedAt,
     operator: "",
@@ -193,15 +259,18 @@ function alertRecordKey(alert, isTraining = false) {
 function addAlertToIncident(alert, isTraining = false) {
   if (!selectedIncident) return null;
   const key = alertRecordKey(alert, isTraining);
-  const newlyGenerated = generateRadioMessage(alert);
-  const newlyGeneratedNixle = generateNixleMessage(alert);
-  const newlyGeneratedFacebook = generateFacebookMessage({ ...alert, isTraining });
+  const countyName = alert.countyName || selectedIncident.countyName || currentCountyName();
+  const newlyGenerated = generateRadioMessage(alert, countyName);
+  const newlyGeneratedNixle = generateNixleMessage(alert, countyName);
+  const newlyGeneratedFacebook = generateFacebookMessage({ ...alert, isTraining }, countyName);
   const existing = selectedIncident.alerts[key];
   selectedIncident.alerts[key] = {
     key,
     alertId: alert.id,
     event: alert.event,
-    area: affectedVanWertArea(alert),
+    area: affectedCountyArea(alert, countyName),
+    countyCode: alert.countyCode || selectedIncident.countyCode || selectedCounty.code,
+    countyName,
     headline: alert.headline,
     officialUrl: alert["@id"] || alert.id,
     sent: alert.sent,
@@ -332,7 +401,81 @@ function setFeedState(state, detail = "") {
   elements["feed-dot"].className = `status-dot ${state}`;
   const labels = { live: "NWS feed live", checking: "Checking NWS feed…", stale: "NWS feed unavailable" };
   elements["feed-status"].textContent = labels[state];
-  elements["last-checked"].textContent = detail || "Van Wert County · OHC161";
+  elements["last-checked"].textContent = detail || countyDisplay();
+}
+
+function updateCountyLabels() {
+  elements["last-checked"].textContent = countyDisplay();
+  elements["alerts-heading"].textContent = `Active ${currentCountyName()} alerts`;
+  elements["source-county-code"].textContent = `Source: National Weather Service · County code ${selectedCounty.code}`;
+  elements["graphic-title"].textContent = `${currentCountyName()} alert graphic`;
+}
+
+function countyCodeFromUrl(url) {
+  return String(url || "").match(/\/zones\/county\/([A-Z]{2}C\d{3})$/)?.[1] || "";
+}
+
+function stateFromCountyCode(code) {
+  return String(code || "").slice(0, 2);
+}
+
+function normalizeCountyName(rawName) {
+  if (!rawName) return "";
+  return /County$/i.test(rawName) ? rawName : `${rawName} County`;
+}
+
+async function loadCountyName(code) {
+  if (!code || countyNameByCode.has(code)) return;
+  try {
+    const response = await fetch(countyBoundaryUrl(code), { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
+    if (!response.ok) throw new Error(`County zone returned ${response.status}`);
+    const data = await response.json();
+    const name = normalizeCountyName(data.properties?.name);
+    const state = data.properties?.state || stateFromCountyCode(code);
+    if (name) {
+      countyNameByCode.set(code, name);
+      countyOptionLabelByCode.set(code, `${name}, ${state} (${code})`);
+    }
+  } catch {
+    countyNameByCode.set(code, code);
+    countyOptionLabelByCode.set(code, code);
+  }
+}
+
+async function loadAlertCountyOptions() {
+  const activeCountyCodes = new Set();
+  try {
+    const response = await fetch(NATIONAL_ALERTS_URL, { headers: { Accept: "application/geo+json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(`National alert list returned ${response.status}`);
+    const data = await response.json();
+    (data.features || [])
+      .filter((feature) => SUPPORTED_EVENTS.includes(feature.properties?.event))
+      .forEach((feature) => {
+        (feature.properties?.affectedZones || []).forEach((zone) => {
+          const code = countyCodeFromUrl(zone);
+          if (code) activeCountyCodes.add(code);
+        });
+      });
+  } catch {
+    activeCountyCodes.add(DEFAULT_COUNTY.code);
+  }
+
+  activeCountyCodes.add(DEFAULT_COUNTY.code);
+  activeCountyCodes.add(selectedCounty.code);
+  await Promise.all([...activeCountyCodes].map(loadCountyName));
+  const options = [...activeCountyCodes]
+    .map((code) => ({
+      code,
+      name: countyNameByCode.get(code) || code,
+      label: countyOptionLabelByCode.get(code) || `${countyNameByCode.get(code) || code} (${code})`,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+  elements["county-select"].replaceChildren(...options.map(({ code, label }) => {
+    const option = makeElement("option", "", label);
+    option.value = code;
+    return option;
+  }));
+  elements["county-select"].value = selectedCounty.code;
 }
 
 function makeElement(tag, className, text) {
@@ -340,6 +483,10 @@ function makeElement(tag, className, text) {
   if (className) element.className = className;
   if (text !== undefined) element.textContent = text;
   return element;
+}
+
+function affectedArea(alert) {
+  return affectedCountyArea(alert, currentCountyName());
 }
 
 function alertPriority(alert) {
@@ -370,12 +517,12 @@ function renderAlerts() {
     const included = Boolean(selectedIncident?.alerts?.[key]);
     const card = makeElement("button", `alert-card ${eventKind(alert)} ${alertCategory(alert)}${included ? " included" : ""}`);
     card.type = "button";
-    card.setAttribute("aria-label", `Open ${alert.event} for ${affectedVanWertArea(alert)}`);
+    card.setAttribute("aria-label", `Open ${alert.event} for ${affectedArea(alert)}`);
     const top = makeElement("div", "alert-card-top");
     top.append(makeElement("span", "alert-event", `${alert.isTraining ? "TRAINING · " : ""}${alert.event}`));
     top.append(makeElement("span", "alert-until", `Until ${formatTime(alert.ends || alert.expires)}`));
     card.append(top);
-    card.append(makeElement("strong", "alert-area", affectedVanWertArea(alert)));
+    card.append(makeElement("strong", "alert-area", affectedArea(alert)));
     card.append(makeElement("span", "alert-headline", alert.headline || "Official NWS alert"));
     if (included) card.append(makeElement("span", "included-label", "Included in incident"));
     card.addEventListener("click", () => selectAlert(alert, Boolean(alert.isTraining)));
@@ -388,17 +535,24 @@ async function fetchAlerts({ quiet = false } = {}) {
   if (!quiet) setFeedState("checking");
   elements["refresh-alerts"].disabled = true;
   try {
-    const response = await fetch(API_URL, { headers: { Accept: "application/geo+json" }, cache: "no-store" });
+    const response = await fetch(countyAlertUrl(), { headers: { Accept: "application/geo+json" }, cache: "no-store" });
     if (!response.ok) throw new Error(`NWS returned ${response.status}`);
     const data = await response.json();
     if (exerciseMode) return;
-    activeAlerts = (data.features || []).map((feature) => ({ ...feature.properties, geometry: feature.geometry, id: feature.id, "@id": feature.id }));
+    activeAlerts = (data.features || []).map((feature) => ({
+      ...feature.properties,
+      countyCode: selectedCounty.code,
+      countyName: currentCountyName(),
+      geometry: feature.geometry,
+      id: feature.id,
+      "@id": feature.id,
+    }));
     announceNewAlerts(activeAlerts);
     if (selectedIncident && !selectedIncident.isTraining) {
       activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).forEach((alert) => addAlertToIncident(alert, false));
       persistIncident();
     }
-    setFeedState("live", `Last checked ${formatTime(new Date().toISOString())} · Van Wert County`);
+    setFeedState("live", `Last checked ${formatTime(new Date().toISOString())} · ${currentCountyName()}`);
     elements["feed-error"].classList.add("hidden");
     renderAlerts();
 
@@ -426,9 +580,18 @@ function setTrainingFeedState() {
   elements["feed-error"].classList.add("hidden");
 }
 
-function generateTrainingAlert() {
+async function trainingBoundary() {
+  try {
+    return await getCountyGeometry();
+  } catch {
+    return null;
+  }
+}
+
+async function generateTrainingAlert() {
   if (selectedIncident && !selectedIncident.isTraining) return;
-  const alert = { ...buildTrainingAlert(elements["training-event"].value, elements["training-polygon"].value), isTraining: true };
+  const boundary = await trainingBoundary();
+  const alert = { ...buildTrainingAlert(elements["training-event"].value, elements["training-polygon"].value, selectedCounty, boundary), isTraining: true };
   if (!exerciseMode) {
     activeAlerts = [];
     selectedAlert = null;
@@ -441,13 +604,14 @@ function generateTrainingAlert() {
   if (alertSoundEnabled) playAlertSound();
 }
 
-function startMultiAlertExercise() {
+async function startMultiAlertExercise() {
   if (selectedIncident) return;
   setTrainingFeedState();
+  const boundary = await trainingBoundary();
   activeAlerts = [
-    buildTrainingAlert("Severe Thunderstorm Watch", "full"),
-    buildTrainingAlert("Tornado Watch", "diagonal"),
-    buildTrainingAlert("Tornado Warning", "southeast"),
+    buildTrainingAlert("Severe Thunderstorm Watch", "full", selectedCounty, boundary),
+    buildTrainingAlert("Tornado Watch", "diagonal", selectedCounty, boundary),
+    buildTrainingAlert("Tornado Warning", "southeast", selectedCounty, boundary),
   ].map((alert) => ({ ...alert, isTraining: true }));
   selectedAlert = null;
   trainingMode = false;
@@ -511,7 +675,7 @@ function selectAlert(alert, isTraining) {
   elements["selected-status"].className = `event-badge ${eventKind(alert)} ${alertCategory(alert)}`;
 
   elements["alert-facts"].replaceChildren();
-  addFact("Affected area", affectedVanWertArea(alert));
+  addFact("Affected area", affectedArea(alert));
   addFact("Expires", formatDateTime(alert.ends || alert.expires));
   addFact("Hazards", hazards(alert) || (/Watch$/.test(alert.event) ? "See official watch" : "Not structured by NWS"));
   addFact("Issued", formatDateTime(alert.sent));
@@ -531,7 +695,7 @@ function selectAlert(alert, isTraining) {
   elements["series-id"].textContent = selectedIncident.seriesId;
   const alertCount = Object.keys(selectedIncident.alerts).length;
   elements["incident-alert-count"].textContent = `${alertCount} alert${alertCount === 1 ? "" : "s"} included in this incident`;
-  elements["official-alert-link"].href = isTraining ? "https://api.weather.gov/alerts/active?zone=OHC161" : (alert["@id"] || alert.id);
+  elements["official-alert-link"].href = isTraining ? countyAlertUrl(alert.countyCode || selectedCounty.code) : (alert["@id"] || alert.id);
   elements["report-button"].disabled = false;
 
   renderChannels();
@@ -694,7 +858,7 @@ function renderTornadoOperations() {
   elements["tornado-operations"].classList.toggle("hidden", !visible);
   if (!visible) return;
   const operations = tornadoOperations();
-  elements["tornado-alert-detail"].textContent = `${affectedVanWertArea(selectedAlert)} · Until ${formatDateTime(selectedAlert.ends || selectedAlert.expires)} · Take shelter now.`;
+  elements["tornado-alert-detail"].textContent = `${affectedArea(selectedAlert)} · Until ${formatDateTime(selectedAlert.ends || selectedAlert.expires)} · Take shelter now.`;
 
   const list = elements["siren-list"];
   list.replaceChildren();
@@ -779,7 +943,7 @@ function addLog(channel, action) {
     id, action, at,
     alertKey: selectedAlertKey,
     alertEvent: alertRecord?.event || "General incident",
-    alertArea: alertRecord?.area || "Van Wert County",
+    alertArea: alertRecord?.area || selectedIncident?.countyName || currentCountyName(),
   });
   if (channel === "EMA Bulletin" && ["issued", "update"].includes(action)) {
     tornadoOperations().broadcasts.push({ id, at, alertKey: selectedAlertKey });
@@ -1171,11 +1335,13 @@ function geometryRings(geometry) {
 }
 
 async function getCountyGeometry() {
-  if (countyGeometry) return countyGeometry;
-  const response = await fetch(COUNTY_URL, { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
+  const cached = countyGeometryCache.get(selectedCounty.code);
+  if (cached) return cached;
+  const response = await fetch(countyBoundaryUrl(), { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
   if (!response.ok) throw new Error(`County boundary request returned ${response.status}`);
-  countyGeometry = (await response.json()).geometry;
-  return countyGeometry;
+  const geometry = (await response.json()).geometry;
+  countyGeometryCache.set(selectedCounty.code, geometry);
+  return geometry;
 }
 
 function drawWrappedText(context, text, x, y, maxWidth, lineHeight, maxLines = 4) {
@@ -1322,13 +1488,7 @@ async function renderAlertGraphic() {
     context.textBaseline = "middle";
     context.fillText(`${trainingMode ? "TRAINING · " : ""}${selectedAlert.event}`, width / 2, titleHeight / 2);
 
-    const allPoints = geometryRings(boundary).flat();
-    const longitudes = allPoints.map((point) => point[0]);
-    const latitudes = allPoints.map((point) => point[1]);
-    const bounds = {
-      minLon: Math.min(...longitudes), maxLon: Math.max(...longitudes),
-      minLat: Math.min(...latitudes), maxLat: Math.max(...latitudes),
-    };
+    const bounds = geometryBounds(boundary);
     const map = { x: sidebarWidth, y: titleHeight, width: width - sidebarWidth, height: height - titleHeight };
     const padding = 48;
     const project = (longitude, latitude) => [
@@ -1345,12 +1505,12 @@ async function renderAlertGraphic() {
     drawGeometry(context, boundary, project, { fill: "#f9f5e7", stroke: "#3b4e56", lineWidth: 4 });
     drawGeometry(context, selectedAlert.geometry || boundary, project, { fill: `${eventColor}b8`, stroke: eventColor, lineWidth: 5 });
 
-    const places = [
+    const places = selectedCounty.code === DEFAULT_COUNTY.code ? [
       ["Van Wert", -84.5841, 40.8695], ["Convoy", -84.7022, 40.9167],
       ["Wren", -84.7747, 40.8006], ["Willshire", -84.7925, 40.7484],
       ["Ohio City", -84.6175, 40.7714], ["Middle Point", -84.4477, 40.8556],
       ["Venedocia", -84.4572, 40.7853], ["Scott", -84.5833, 40.9878],
-    ];
+    ] : [];
     context.textAlign = "left";
     context.textBaseline = "alphabetic";
     context.font = "700 22px system-ui, sans-serif";
@@ -1365,6 +1525,15 @@ async function renderAlertGraphic() {
       context.strokeText(name, x + 8, y - 7);
       context.fillText(name, x + 8, y - 7);
     });
+    if (!places.length) {
+      const [x, y] = project((bounds.minLon + bounds.maxLon) / 2, (bounds.minLat + bounds.maxLat) / 2);
+      context.textAlign = "center";
+      context.fillStyle = "#16252c";
+      context.lineWidth = 6;
+      context.strokeStyle = "#f9f5e7";
+      context.strokeText(currentCountyName(), x, y);
+      context.fillText(currentCountyName(), x, y);
+    }
     context.restore();
 
     context.textAlign = "left";
@@ -1380,7 +1549,7 @@ async function renderAlertGraphic() {
     context.fillText("AFFECTED AREA", 28, 245);
     context.fillStyle = "#fff";
     context.font = "700 25px system-ui, sans-serif";
-    drawWrappedText(context, affectedVanWertArea(selectedAlert), 28, 280, sidebarWidth - 56, 31, 2);
+    drawWrappedText(context, affectedArea(selectedAlert), 28, 280, sidebarWidth - 56, 31, 2);
 
     context.fillStyle = "#b9d5db";
     context.font = "800 18px system-ui, sans-serif";
@@ -1466,7 +1635,7 @@ async function shareFacebook() {
   const url = selectedAlert?.["@id"] || selectedAlert?.id || "";
   if (navigator.share) {
     try {
-      await navigator.share({ title: selectedAlert?.event || "Van Wert County weather alert", text, ...(url ? { url } : {}) });
+      await navigator.share({ title: selectedAlert?.event || `${currentCountyName()} weather alert`, text, ...(url ? { url } : {}) });
       elements["copy-status"].textContent = "Post sent to the device share menu.";
       return;
     } catch (error) {
@@ -1488,6 +1657,39 @@ function exportRecords() {
   URL.revokeObjectURL(url);
 }
 
+function resetWorkspaceForCountyChange() {
+  activeAlerts = [];
+  selectedAlert = null;
+  selectedAlertKey = null;
+  trainingMode = false;
+  exerciseMode = false;
+  elements.workspace.classList.add("hidden");
+  elements["channel-section"].classList.add("hidden");
+  elements["tornado-operations"].classList.add("hidden");
+  elements["staffing-section"].classList.add("hidden");
+  elements["return-live"].classList.add("hidden");
+  elements["report-button"].disabled = !selectedIncident;
+  updateFloatingSirenStatus(null);
+  renderAlerts();
+}
+
+async function changeCounty(event) {
+  const code = event.target.value || DEFAULT_COUNTY.code;
+  selectedCounty = { code, name: countyNameByCode.get(code) || code };
+  updateCountyLabels();
+  if (selectedIncident && !selectedIncident.closedAt) {
+    selectedIncident.closedAt = new Date().toISOString();
+    stopActiveSirenCycles(tornadoOperations(), selectedIncident.closedAt);
+    persistIncident();
+    localStorage.removeItem(ACTIVE_INCIDENT_KEY);
+    selectedIncident = null;
+    setIncidentControls(false);
+  }
+  resetWorkspaceForCountyChange();
+  await fetchAlerts();
+}
+
+elements["county-select"].addEventListener("change", changeCounty);
 elements["refresh-alerts"].addEventListener("click", () => fetchAlerts());
 elements["toggle-alert-sound"].addEventListener("click", toggleAlertSound);
 elements["load-training"].addEventListener("click", () => elements["training-dialog"].showModal());
@@ -1640,6 +1842,10 @@ if (restoredIncidentId) {
   const restoredIncident = loadIncidents()[restoredIncidentId];
   if (restoredIncident && !restoredIncident.closedAt) {
     selectedIncident = restoredIncident;
+    if (restoredIncident.countyCode && restoredIncident.countyName) {
+      selectedCounty = { code: restoredIncident.countyCode, name: restoredIncident.countyName };
+      countyNameByCode.set(selectedCounty.code, selectedCounty.name);
+    }
     setIncidentControls(true);
   } else {
     localStorage.removeItem(ACTIVE_INCIDENT_KEY);
@@ -1654,5 +1860,10 @@ document.addEventListener("pointerdown", () => {
   if (alertSoundEnabled) getAlertAudioContext()?.resume();
 }, { once: true });
 renderHistory();
-fetchAlerts();
-setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);
+updateCountyLabels();
+loadAlertCountyOptions().finally(() => {
+  elements["county-select"].value = selectedCounty.code;
+  updateCountyLabels();
+  fetchAlerts();
+  setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);
+});

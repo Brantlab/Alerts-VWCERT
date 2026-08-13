@@ -37,6 +37,12 @@
         </div>
       </div>
       <div class="status-actions">
+        <label class="county-picker" for="county-select">
+          <span>County</span>
+          <select id="county-select">
+            <option value="OHC161">Van Wert County</option>
+          </select>
+        </label>
         <span id="active-count" class="count-badge">— active</span>
         <button id="toggle-alert-sound" class="button compact sound-toggle" type="button" aria-pressed="false">Alert sound: Off</button>
         <button id="refresh-alerts" class="button compact" type="button">Refresh now</button>
@@ -292,7 +298,7 @@
   </aside>
 
   <footer>
-    <p>Source: National Weather Service · County code OHC161</p>
+    <p id="source-county-code">Source: National Weather Service · County code OHC161</p>
     <p class="safety-note">Decision-support tool only. Confirm alert details with official NWS information. Do not use this application to activate EAS equipment.</p>
   </footer>
 
@@ -340,7 +346,7 @@
     <div class="dialog-heading">
       <div>
         <p class="section-kicker">Shareable PNG</p>
-        <h2>Van Wert County alert graphic</h2>
+        <h2 id="graphic-title">Van Wert County alert graphic</h2>
       </div>
       <button class="icon-button dialog-close" type="button" data-close-dialog="graphic-dialog" aria-label="Close graphic preview">×</button>
     </div>

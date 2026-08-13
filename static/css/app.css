@@ -57,6 +57,9 @@ button:disabled { cursor: wait; opacity: .6; }
 .status-dot.stale { background: #ff6477; }
 @keyframes pulse { 50% { opacity: .45; } }
 .count-badge { padding: .3rem .65rem; background: rgba(255,255,255,.12); border-radius: 999px; font-size: .8rem; font-weight: 800; }
+.county-picker { display: grid; gap: .15rem; min-width: min(260px, 45vw); color: #bed0d9; font-size: .68rem; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+.county-picker select { min-height: 34px; padding: .35rem 1.9rem .35rem .6rem; color: white; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.28); font-size: .82rem; font-weight: 800; text-transform: none; letter-spacing: 0; }
+.county-picker select option { color: var(--ink); background: white; }
 .sound-toggle.enabled { color: #075238; background: #dff5ea; border-color: #78c5a2; }
 
 .notice { margin-bottom: 1rem; padding: .9rem 1rem; border-radius: 10px; font-weight: 650; }

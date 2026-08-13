@@ -26,12 +26,12 @@ Pushes to `main` automatically build and deploy the site with the GitHub Pages w
 
 ## Data and operating notes
 
-- The browser polls `https://api.weather.gov/alerts/active?zone=OHC161` every 30 seconds.
+- The browser defaults to Van Wert County (`OHC161`) and polls the selected county's active NWS alert feed every 30 seconds. The county selector is built from counties nationally that currently have supported watches or warnings, with Van Wert kept available as the home county.
 - **Alert sound** is an operator-controlled three-note chime. Enabling it plays a test and stores the preference on that device; new NWS alert series chime once, while routine updates to the same series do not repeat the sound. The initial page load is silent.
 - Incident records, message edits, channel logs, and staffing entries are stored in that browser's local storage. Use **Export JSON** for a backup or transfer.
 - **Report / Print** creates a clean activity report with a chronological communication log. Saved incidents also have a **View report** button.
 - **Create alert graphic** previews and downloads a 1200×675 PNG. Watches use yellow and warnings use red, matching the NWS examples. Built-in vector icons identify tornado, wind, hail, and lightning threats without relying on external image services. It is an EMA-generated decision-support graphic, not an official NWS image.
-- **Open training lab** generates clearly marked training alerts for every county corner, a center strip, diagonal crossing, full-county coverage, or a newly randomized polygon. Operators can generate additional alerts into the same active training incident.
+- **Open training lab** generates clearly marked training alerts for the selected county: every county corner, a center strip, diagonal crossing, full-county coverage, or a newly randomized polygon. Operators can generate additional alerts into the same active training incident.
 - **Load multi-alert exercise** replaces the alert list with two simultaneous watches and a southeast-corner warning, grouped into one training incident; **Return to live feed** exits the exercise.
 - **Start incident** groups every active watch and warning into one operational session. Radio/Nixle drafts remain alert-specific, while operator details, staffing, and channel timestamps are shared in one chronological activity log. Each log entry retains its related alert.
 - **Complete incident** closes the shared session and opens its combined printable report. An unfinished incident resumes after a browser refresh.

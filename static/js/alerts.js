@@ -91,12 +91,19 @@ export function cleanText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
 }
 
-export function affectedVanWertArea(alert) {
+export function affectedCountyArea(alert, countyName = "Van Wert County") {
+  const countyPattern = countyName
+    .replace(/\s+County$/i, "")
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const source = `${alert.description || ""}\n${getParameter(alert, "NWSheadline")}\n${alert.headline || ""}`;
-  const match = source.match(/\b((?:extreme\s+)?(?:northwestern|northeastern|southwestern|southeastern|northern|southern|eastern|western|central))?\s*Van Wert(?: County)?\b/i);
-  if (!match) return "an area including Van Wert County";
+  const match = source.match(new RegExp(`\\b((?:extreme\\s+)?(?:northwestern|northeastern|southwestern|southeastern|northern|southern|eastern|western|central))?\\s*${countyPattern}(?: County)?\\b`, "i"));
+  if (!match) return `an area including ${countyName}`;
   const direction = (match[1] || "").toLowerCase();
-  return direction ? `${direction} Van Wert County` : "Van Wert County";
+  return direction ? `${direction} ${countyName}` : countyName;
+}
+
+export function affectedVanWertArea(alert) {
+  return affectedCountyArea(alert, "Van Wert County");
 }
 
 function nixleTime(value) {
@@ -110,8 +117,8 @@ function nixleTime(value) {
   }).format(date);
 }
 
-function nixleArea(alert) {
-  const area = affectedVanWertArea(alert);
+function nixleArea(alert, countyName = "Van Wert County") {
+  const area = affectedCountyArea(alert, countyName);
   const abbreviations = {
     "extreme northwestern": "extreme NW", "extreme northeastern": "extreme NE",
     "extreme southwestern": "extreme SW", "extreme southeastern": "extreme SE",
@@ -119,9 +126,9 @@ function nixleArea(alert) {
     northern: "N", southern: "S", eastern: "E", western: "W", central: "central",
   };
   for (const [long, short] of Object.entries(abbreviations)) {
-    if (area.startsWith(`${long} `)) return `${short} Van Wert County`;
+    if (area.startsWith(`${long} `)) return `${short} ${countyName}`;
   }
-  return "Van Wert County";
+  return countyName;
 }
 
 function compactWind(alert) {
@@ -149,7 +156,7 @@ function fitNixle(core, suffixes) {
   return `${clipped.slice(0, lastSpace > 80 ? lastSpace : 119).replace(/[,. ]+$/, "")}.`;
 }
 
-export function generateNixleMessage(alert) {
+export function generateNixleMessage(alert, countyName = "Van Wert County") {
   const prefix = "";
   const labels = {
     "Severe Thunderstorm Watch": "Severe T-storm WATCH",
@@ -158,7 +165,7 @@ export function generateNixleMessage(alert) {
     "Tornado Warning": "TORNADO WARNING",
   };
   const label = labels[alert?.event] || alert?.event || "Weather alert";
-  const area = nixleArea(alert);
+  const area = nixleArea(alert, countyName);
 
   if (isCancellation(alert)) return fitNixle(`${prefix}${label} CANCELLED for ${area}.`, []);
   if (isExpiration(alert)) return fitNixle(`${prefix}${label} has expired for ${area}.`, []);
@@ -196,9 +203,9 @@ export function generateNixleMessage(alert) {
   ]);
 }
 
-export function generateFacebookMessage(alert) {
+export function generateFacebookMessage(alert, countyName = "Van Wert County") {
   const event = alert?.event || "Weather Alert";
-  const area = affectedVanWertArea(alert);
+  const area = affectedCountyArea(alert, countyName);
   const until = formatTime(expirationValue(alert), true);
   const isWarning = /Warning$/.test(event);
   const heading = `${isWarning ? "🚨" : "⚠️"} ${event.toUpperCase()}`;
@@ -229,7 +236,7 @@ export function generateFacebookMessage(alert) {
   } else {
     lines.push("Stay weather aware and be prepared to act if a warning is issued.");
   }
-  lines.push("Follow Van Wert County Emergency Management for updates.");
+  lines.push(`Follow ${countyName} Emergency Management for updates.`);
   return lines.join("\n\n");
 }
 
@@ -329,24 +336,26 @@ function expirationValue(alert) {
   return alert.ends || getParameter(alert, "eventEndingTime") || alert.expires;
 }
 
-function wrapRadioMessage(message) {
-  const introduction = "This is the Van Wert County Emergency Management Agency with a special weather statement.";
-  const signoff = "Authority of the National Weather Service. This is the Van Wert County EMA KNM906.";
+function wrapRadioMessage(message, countyName = "Van Wert County") {
+  const introduction = `This is the ${countyName} Emergency Management Agency with a special weather statement.`;
+  const signoff = countyName === "Van Wert County"
+    ? "Authority of the National Weather Service. This is the Van Wert County EMA KNM906."
+    : `Authority of the National Weather Service. This is the ${countyName} EMA.`;
   return `${introduction} ${message} ${signoff}`;
 }
 
-export function generateRadioMessage(alert) {
+export function generateRadioMessage(alert, countyName = "Van Wert County") {
   const event = alert.event || "weather alert";
-  const area = affectedVanWertArea(alert);
+  const area = affectedCountyArea(alert, countyName);
   const until = formatTime(expirationValue(alert));
   const office = officeName(alert);
 
   if (isCancellation(alert)) {
-    return wrapRadioMessage(`The National Weather Service in ${office} has cancelled the ${event} for ${area}. The warning is no longer in effect. Again, the ${event} for ${area} has been cancelled.`);
+    return wrapRadioMessage(`The National Weather Service in ${office} has cancelled the ${event} for ${area}. The warning is no longer in effect. Again, the ${event} for ${area} has been cancelled.`, countyName);
   }
 
   if (isExpiration(alert)) {
-    return wrapRadioMessage(`The National Weather Service in ${office} reports that the ${event} for ${area} is expiring. The warning is no longer in effect. Again, the ${event} for ${area} has expired.`);
+    return wrapRadioMessage(`The National Weather Service in ${office} reports that the ${event} for ${area} is expiring. The warning is no longer in effect. Again, the ${event} for ${area} has expired.`, countyName);
   }
 
   const start = `The National Weather Service in ${office} ${actionPhrase(alert)} a ${event} for ${area} until ${until}.`;
@@ -356,7 +365,7 @@ export function generateRadioMessage(alert) {
     const meaning = event === "Tornado Watch"
       ? "Conditions are favorable for tornadoes and severe thunderstorms to develop. Be prepared to move to a place of safety if a warning is issued."
       : "Conditions are favorable for severe thunderstorms to develop, with damaging winds and large hail possible. Be prepared to take protective action if a warning is issued.";
-    return wrapRadioMessage(`${start} ${meaning} ${again}`);
+    return wrapRadioMessage(`${start} ${meaning} ${again}`, countyName);
   }
 
   const hazard = hazards(alert);
@@ -367,11 +376,11 @@ export function generateRadioMessage(alert) {
   if (event === "Tornado Warning") {
     const source = tornadoSourceSentence(alert);
     const instruction = cleanText(alert.instruction) || "Move to an interior room on the lowest floor of a sturdy building, away from windows.";
-    return wrapRadioMessage([start, source, locationSentence, "A Tornado Warning means a tornado is occurring or may occur soon.", instruction, again].filter(Boolean).join(" "));
+    return wrapRadioMessage([start, source, locationSentence, "A Tornado Warning means a tornado is occurring or may occur soon.", instruction, again].filter(Boolean).join(" "), countyName);
   }
 
   const instruction = cleanText(alert.instruction) || "Move indoors to an interior room on the lowest floor of a sturdy building.";
-  return wrapRadioMessage([start, hazardSentence, locationSentence, "A Severe Thunderstorm Warning means severe weather is occurring or imminent.", instruction, again].filter(Boolean).join(" "));
+  return wrapRadioMessage([start, hazardSentence, locationSentence, "A Severe Thunderstorm Warning means severe weather is occurring or imminent.", instruction, again].filter(Boolean).join(" "), countyName);
 }
 
 export function channelsFor(alert) {
