@@ -469,7 +469,11 @@ async function loadAlertCountyOptions() {
       name: countyNameByCode.get(code) || code,
       label: countyOptionLabelByCode.get(code) || `${countyNameByCode.get(code) || code} (${code})`,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+    .sort((a, b) => {
+      if (a.code === DEFAULT_COUNTY.code) return -1;
+      if (b.code === DEFAULT_COUNTY.code) return 1;
+      return a.name.localeCompare(b.name) || a.code.localeCompare(b.code);
+    });
   elements["county-select"].replaceChildren(...options.map(({ code, label }) => {
     const option = makeElement("option", "", label);
     option.value = code;
