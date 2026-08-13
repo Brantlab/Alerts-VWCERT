@@ -4,6 +4,7 @@ import {
   affectedCountyArea,
   channelsFor,
   eventKind,
+  extractLocations,
   formatDateTime,
   formatElapsed,
   formatTime,
@@ -18,6 +19,10 @@ import {
 
 const DEFAULT_COUNTY = { code: "OHC161", name: "Van Wert County" };
 const NATIONAL_ALERTS_URL = "https://api.weather.gov/alerts/active";
+const NATIONAL_CITIES_URL = "https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv";
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+const MAX_HIGHWAY_SEGMENTS = 1000;
+const HIGHWAY_MERGE_DISTANCE_METERS = 400;
 const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const ALERT_SOUND_KEY = "vwcert-alert-sound-v1";
@@ -32,7 +37,6 @@ const DEFAULT_STAFF = [
   ["Justin Brant", "Communications"],
   ["Janis Kelser", "PIO"],
 ];
-
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 let activeAlerts = [];
 let selectedAlert = null;
@@ -44,6 +48,9 @@ let selectedCounty = { ...DEFAULT_COUNTY };
 let countyGeometryCache = new Map();
 let countyNameByCode = new Map([[DEFAULT_COUNTY.code, DEFAULT_COUNTY.name]]);
 let countyOptionLabelByCode = new Map([[DEFAULT_COUNTY.code, `${DEFAULT_COUNTY.name} (${DEFAULT_COUNTY.code})`]]);
+let countyAlertLevelByCode = new Map();
+let nationalCitiesPromise = null;
+let highwayCache = new Map();
 let reportIncident = null;
 let exerciseMode = false;
 let operationsTimer = null;
@@ -106,6 +113,44 @@ function geometryBounds(geometry) {
     minLon: Math.min(...longitudes), maxLon: Math.max(...longitudes),
     minLat: Math.min(...latitudes), maxLat: Math.max(...latitudes),
   };
+}
+
+function combineBounds(...geometries) {
+  const bounds = geometries.map(geometryBounds).filter(Boolean);
+  if (!bounds.length) return null;
+  return {
+    minLon: Math.min(...bounds.map((item) => item.minLon)),
+    maxLon: Math.max(...bounds.map((item) => item.maxLon)),
+    minLat: Math.min(...bounds.map((item) => item.minLat)),
+    maxLat: Math.max(...bounds.map((item) => item.maxLat)),
+  };
+}
+
+function rectangularGeometryFromBounds(bounds, paddingRatio = .08) {
+  if (!bounds) return null;
+  const lonPadding = Math.max((bounds.maxLon - bounds.minLon) * paddingRatio, .01);
+  const latPadding = Math.max((bounds.maxLat - bounds.minLat) * paddingRatio, .01);
+  const minLon = bounds.minLon - lonPadding;
+  const maxLon = bounds.maxLon + lonPadding;
+  const minLat = bounds.minLat - latPadding;
+  const maxLat = bounds.maxLat + latPadding;
+  return {
+    type: "Polygon",
+    coordinates: [[
+      [minLon, maxLat],
+      [maxLon, maxLat],
+      [maxLon, minLat],
+      [minLon, minLat],
+      [minLon, maxLat],
+    ]],
+  };
+}
+
+function fallbackCountyGeometry(alert = selectedAlert) {
+  const bounds = geometryBounds(alert?.geometry);
+  if (bounds) return rectangularGeometryFromBounds(bounds, .2);
+  if (selectedCounty.code === DEFAULT_COUNTY.code) return { type: "Polygon", coordinates: [closePolygon(trainingPolygons.full.points)] };
+  return null;
 }
 
 function trainingPolygonFromBoundary(scenarioName, boundary) {
@@ -411,6 +456,12 @@ function updateCountyLabels() {
   elements["graphic-title"].textContent = `${currentCountyName()} alert graphic`;
 }
 
+function updateCountySelectAlertClass() {
+  const level = countyAlertLevelByCode.get(selectedCounty.code) || "";
+  elements["county-select"].classList.toggle("warning", level === "warning");
+  elements["county-select"].classList.toggle("watch", level === "watch");
+}
+
 function countyCodeFromUrl(url) {
   return String(url || "").match(/\/zones\/county\/([A-Z]{2}C\d{3})$/)?.[1] || "";
 }
@@ -444,6 +495,7 @@ async function loadCountyName(code) {
 
 async function loadAlertCountyOptions() {
   const activeCountyCodes = new Set();
+  const nextAlertLevels = new Map();
   try {
     const response = await fetch(NATIONAL_ALERTS_URL, { headers: { Accept: "application/geo+json" }, cache: "no-store" });
     if (!response.ok) throw new Error(`National alert list returned ${response.status}`);
@@ -453,7 +505,11 @@ async function loadAlertCountyOptions() {
       .forEach((feature) => {
         (feature.properties?.affectedZones || []).forEach((zone) => {
           const code = countyCodeFromUrl(zone);
-          if (code) activeCountyCodes.add(code);
+          if (code) {
+            const level = countyAlertLevel(feature.properties);
+            activeCountyCodes.add(code);
+            if (level === "warning" || !nextAlertLevels.has(code)) nextAlertLevels.set(code, level);
+          }
         });
       });
   } catch {
@@ -462,24 +518,35 @@ async function loadAlertCountyOptions() {
 
   activeCountyCodes.add(DEFAULT_COUNTY.code);
   activeCountyCodes.add(selectedCounty.code);
+  countyAlertLevelByCode = nextAlertLevels;
   await Promise.all([...activeCountyCodes].map(loadCountyName));
   const options = [...activeCountyCodes]
     .map((code) => ({
       code,
       name: countyNameByCode.get(code) || code,
       label: countyOptionLabelByCode.get(code) || `${countyNameByCode.get(code) || code} (${code})`,
+      level: countyAlertLevelByCode.get(code) || "",
     }))
     .sort((a, b) => {
       if (a.code === DEFAULT_COUNTY.code) return -1;
       if (b.code === DEFAULT_COUNTY.code) return 1;
       return a.name.localeCompare(b.name) || a.code.localeCompare(b.code);
     });
-  elements["county-select"].replaceChildren(...options.map(({ code, label }) => {
-    const option = makeElement("option", "", label);
+  elements["county-select"].replaceChildren(...options.map(({ code, label, level }) => {
+    const status = level ? `${level === "warning" ? "Warning" : "Watch"} · ` : "";
+    const option = makeElement("option", `county-option ${level}`.trim(), `${status}${label}`);
     option.value = code;
+    if (level === "warning") {
+      option.style.backgroundColor = "#fde8eb";
+      option.style.color = "#8b1a2a";
+    } else if (level === "watch") {
+      option.style.backgroundColor = "#fff8d7";
+      option.style.color = "#635000";
+    }
     return option;
   }));
   elements["county-select"].value = selectedCounty.code;
+  updateCountySelectAlertClass();
 }
 
 function makeElement(tag, className, text) {
@@ -493,12 +560,228 @@ function affectedArea(alert) {
   return affectedCountyArea(alert, currentCountyName());
 }
 
+function setGraphicStatus(message) {
+  if (elements["graphic-status"]) elements["graphic-status"].textContent = message || "";
+}
+
+function impactedPlaceNames(alert) {
+  const raw = extractLocations(alert?.description || "")
+    .replace(/\.$/, "")
+    .replace(/\band\b/gi, ",");
+  return [...new Set(raw.split(",")
+    .map((name) => name.trim().replace(/\s+/g, " "))
+    .filter((name) => name.length > 1)
+    .filter((name) => !/\b(county|counties|township|route|highway|interstate|turnpike|parkway|airport|lake|river|creek|campground)\b/i.test(name))
+    .filter((name) => !/^(us|i|state)\s*\d+/i.test(name))
+    .slice(0, 10))];
+}
+
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"' && line[index + 1] === '"') {
+      cell += '"';
+      index += 1;
+    } else if (character === '"') {
+      quoted = !quoted;
+    } else if (character === "," && !quoted) {
+      cells.push(cell);
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+  cells.push(cell);
+  return cells;
+}
+
+function countyLookupName(countyName = currentCountyName()) {
+  return countyName.replace(/\s+County$/i, "").trim().toLowerCase();
+}
+
+async function loadNationalCities() {
+  nationalCitiesPromise ||= fetch(NATIONAL_CITIES_URL, { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`National city list returned ${response.status}`);
+      return response.text();
+    })
+    .then((csv) => csv.trim().split(/\r?\n/).slice(1).map(parseCsvLine).map((row) => ({
+      stateCode: row[1],
+      name: row[3],
+      county: row[4],
+      latitude: Number(row[5]),
+      longitude: Number(row[6]),
+    })).filter((place) => place.name && Number.isFinite(place.latitude) && Number.isFinite(place.longitude)));
+  return nationalCitiesPromise;
+}
+
+async function countyPlaces(county = selectedCounty) {
+  const stateCode = stateFromCountyCode(county.code);
+  const countyName = countyLookupName(county.name);
+  const places = await loadNationalCities();
+  return places
+    .filter((place) => place.stateCode === stateCode && place.county.toLowerCase() === countyName)
+    .map((place) => ({ name: place.name, longitude: place.longitude, latitude: place.latitude }));
+}
+
+function pointInBounds(place, bounds) {
+  return place
+    && place.longitude >= bounds.minLon
+    && place.longitude <= bounds.maxLon
+    && place.latitude >= bounds.minLat
+    && place.latitude <= bounds.maxLat;
+}
+
+function highwayBoundsKey(bounds) {
+  return [bounds.minLat, bounds.minLon, bounds.maxLat, bounds.maxLon]
+    .map((value) => value.toFixed(3))
+    .join(",");
+}
+
+function distanceMeters(a, b) {
+  const latMeters = (a[1] - b[1]) * 111_320;
+  const lonMeters = (a[0] - b[0]) * 111_320 * Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
+  return Math.hypot(latMeters, lonMeters);
+}
+
+function routeKey(highway) {
+  return `${highway.kind}|${highway.label}`.toLowerCase();
+}
+
+function joinPoints(a, b, mode) {
+  if (mode === "end-start") return [...a, ...b.slice(1)];
+  if (mode === "start-end") return [...b, ...a.slice(1)];
+  if (mode === "start-start") return [[...b].reverse(), a.slice(1)].flat();
+  return [a, [...b].reverse().slice(1)].flat();
+}
+
+function closestJoinMode(a, b) {
+  const aStart = a[0];
+  const aEnd = a[a.length - 1];
+  const bStart = b[0];
+  const bEnd = b[b.length - 1];
+  return [
+    ["end-start", distanceMeters(aEnd, bStart)],
+    ["start-end", distanceMeters(aStart, bEnd)],
+    ["start-start", distanceMeters(aStart, bStart)],
+    ["end-end", distanceMeters(aEnd, bEnd)],
+  ].sort((left, right) => left[1] - right[1])[0];
+}
+
+function mergeRouteSegments(highways) {
+  const merged = [];
+  const groups = Map.groupBy ? Map.groupBy(highways, routeKey) : null;
+  const entries = groups ? [...groups.values()] : Object.values(highways.reduce((accumulator, highway) => {
+    const key = routeKey(highway);
+    accumulator[key] ||= [];
+    accumulator[key].push(highway);
+    return accumulator;
+  }, {}));
+
+  entries.forEach((group) => {
+    const lines = group.map((highway) => ({ ...highway, points: [...highway.points] }));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < lines.length && !changed; i += 1) {
+        for (let j = i + 1; j < lines.length; j += 1) {
+          const [mode, distance] = closestJoinMode(lines[i].points, lines[j].points);
+          if (distance > HIGHWAY_MERGE_DISTANCE_METERS) continue;
+          lines[i] = { ...lines[i], points: joinPoints(lines[i].points, lines[j].points, mode) };
+          lines.splice(j, 1);
+          changed = true;
+          break;
+        }
+      }
+    }
+    merged.push(...lines);
+  });
+  return merged;
+}
+
+async function majorHighwaysForBounds(bounds) {
+  const key = highwayBoundsKey(bounds);
+  if (highwayCache.has(key)) return highwayCache.get(key);
+  const query = `[out:json][timeout:8];way["highway"~"motorway|trunk|primary|secondary"]["ref"](${bounds.minLat},${bounds.minLon},${bounds.maxLat},${bounds.maxLon});out geom;`;
+  try {
+    const response = await fetch(`${OVERPASS_URL}?data=${encodeURIComponent(query)}`, {
+      headers: { Accept: "application/json" },
+      cache: "force-cache",
+    });
+    if (!response.ok) throw new Error(`Overpass returned ${response.status}`);
+    const data = await response.json();
+    const allHighways = (data.elements || [])
+      .filter((element) => element.type === "way" && element.geometry?.length > 1)
+      .filter((element) => /(^|;| )(I|US|SR|IA|OH|IN|MI|IL|WI|MN|MO|KS|NE|SD|ND|TX|OK|AR|LA|MS|AL|GA|FL|SC|NC|VA|WV|KY|TN|PA|NY|NJ|DE|MD|CT|RI|MA|VT|NH|ME|CA|OR|WA|NV|AZ|UT|CO|NM|ID|MT|WY|AK|HI)\s*[-]?\s*\d+/i.test(element.tags?.ref || ""))
+      .map((element) => ({
+        id: element.id,
+        kind: element.tags?.highway || "primary",
+        label: element.tags?.ref || element.tags?.name || "",
+        points: element.geometry.map((point) => [point.lon, point.lat]),
+      }));
+    const mergedHighways = mergeRouteSegments(allHighways);
+    const result = {
+      highways: mergedHighways.slice(0, MAX_HIGHWAY_SEGMENTS),
+      truncated: mergedHighways.length > MAX_HIGHWAY_SEGMENTS,
+      total: mergedHighways.length,
+      rawTotal: allHighways.length,
+    };
+    highwayCache.set(key, result);
+    return result;
+  } catch {
+    const result = { highways: [], truncated: false, total: 0 };
+    highwayCache.set(key, result);
+    return result;
+  }
+}
+
+async function placesForGraphic(alert, bounds) {
+  if (selectedCounty.code === DEFAULT_COUNTY.code) {
+    setGraphicStatus("Using saved Van Wert County place labels.");
+    return [
+      { name: "Van Wert", longitude: -84.5841, latitude: 40.8695 },
+      { name: "Convoy", longitude: -84.7022, latitude: 40.9167 },
+      { name: "Wren", longitude: -84.7747, latitude: 40.8006 },
+      { name: "Willshire", longitude: -84.7925, latitude: 40.7484 },
+      { name: "Ohio City", longitude: -84.6175, latitude: 40.7714 },
+      { name: "Middle Point", longitude: -84.4477, latitude: 40.8556 },
+      { name: "Venedocia", longitude: -84.4572, latitude: 40.7853 },
+      { name: "Scott", longitude: -84.5833, latitude: 40.9878 },
+    ];
+  }
+  const names = impactedPlaceNames(alert);
+  setGraphicStatus(names.length
+    ? `Loading national city data and matching NWS place names: ${names.join(", ")}.`
+    : `Loading national city data for ${currentCountyName()}.`);
+  const places = (await countyPlaces()).filter((place) => pointInBounds(place, bounds));
+  if (!places.length) {
+    setGraphicStatus(`Loaded national city data, but no ${currentCountyName()} places fell inside the map area.`);
+    return [];
+  }
+  const nameSet = new Set(names.map((name) => name.toLowerCase()));
+  const matched = places.filter((place) => nameSet.has(place.name.toLowerCase()));
+  const plotted = (matched.length ? matched : places)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 8);
+  setGraphicStatus(matched.length
+    ? `Plotted ${plotted.length} NWS named place${plotted.length === 1 ? "" : "s"} from national city data.`
+    : `No exact NWS place-name matches found; plotted ${plotted.length} ${currentCountyName()} place label${plotted.length === 1 ? "" : "s"} from national city data.`);
+  return plotted;
+}
+
 function alertPriority(alert) {
   const priorities = { "Tornado Warning": 1, "Severe Thunderstorm Warning": 2, "Tornado Watch": 3, "Severe Thunderstorm Watch": 4 };
   return priorities[alert.event] || 99;
 }
 
 function alertCategory(alert) {
+  return /Warning$/.test(alert?.event || "") ? "warning" : "watch";
+}
+
+function countyAlertLevel(alert) {
   return /Warning$/.test(alert?.event || "") ? "warning" : "watch";
 }
 
@@ -588,7 +871,7 @@ async function trainingBoundary() {
   try {
     return await getCountyGeometry();
   } catch {
-    return null;
+    return fallbackCountyGeometry();
   }
 }
 
@@ -1339,12 +1622,16 @@ function geometryRings(geometry) {
 }
 
 async function getCountyGeometry() {
-  const cached = countyGeometryCache.get(selectedCounty.code);
+  return getCountyGeometryByCode(selectedCounty.code);
+}
+
+async function getCountyGeometryByCode(code) {
+  const cached = countyGeometryCache.get(code);
   if (cached) return cached;
-  const response = await fetch(countyBoundaryUrl(), { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
+  const response = await fetch(countyBoundaryUrl(code), { headers: { Accept: "application/geo+json" }, cache: "force-cache" });
   if (!response.ok) throw new Error(`County boundary request returned ${response.status}`);
   const geometry = (await response.json()).geometry;
-  countyGeometryCache.set(selectedCounty.code, geometry);
+  countyGeometryCache.set(code, geometry);
   return geometry;
 }
 
@@ -1388,6 +1675,21 @@ function drawGeometry(context, geometry, project, options = {}) {
     context.lineWidth = options.lineWidth || 2;
     context.stroke();
   }
+}
+
+function traceGeometryPath(context, geometry, project) {
+  const rings = geometryRings(geometry);
+  if (!rings.length) return false;
+  context.beginPath();
+  rings.forEach((ring) => {
+    ring.forEach(([longitude, latitude], index) => {
+      const [x, y] = project(longitude, latitude);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.closePath();
+  });
+  return true;
 }
 
 function drawThreatIcon(context, kind, x, y, size = 38) {
@@ -1465,12 +1767,179 @@ function drawThreatList(context, alert, accentColor, startY, sidebarWidth) {
   });
 }
 
+function drawPolyline(context, points, project) {
+  if (!points?.length) return;
+  context.beginPath();
+  points.forEach(([longitude, latitude], index) => {
+    const [x, y] = project(longitude, latitude);
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  });
+  context.stroke();
+}
+
+function highwayColor(kind) {
+  if (kind === "motorway") return "#d66b35";
+  if (kind === "trunk") return "#d5962f";
+  if (kind === "secondary") return "#c6a35a";
+  return "#b8842c";
+}
+
+function highwayCasingWidth(kind) {
+  if (kind === "motorway") return 6;
+  if (kind === "secondary") return 3.5;
+  return 4.5;
+}
+
+function highwayStrokeWidth(kind) {
+  if (kind === "motorway") return 3;
+  if (kind === "secondary") return 1.5;
+  return 2.1;
+}
+
+function boxesOverlap(a, b, padding = 4) {
+  return !(
+    a.x + a.width + padding < b.x
+    || b.x + b.width + padding < a.x
+    || a.y + a.height + padding < b.y
+    || b.y + b.height + padding < a.y
+  );
+}
+
+function boxInsideMap(box, map) {
+  return box.x >= map.x
+    && box.y >= map.y
+    && box.x + box.width <= map.x + map.width
+    && box.y + box.height <= map.y + map.height;
+}
+
+function firstAvailableBox(candidates, occupied, map) {
+  return candidates.find((box) => boxInsideMap(box, map) && !occupied.some((other) => boxesOverlap(box, other)));
+}
+
+function highwayLabelText(label) {
+  return (label || "").split(";")[0].replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function highwayLabelPriority(highway) {
+  const label = highwayLabelText(highway.label);
+  if (highway.kind === "motorway" || /^I\s*\d+/i.test(label)) return 1;
+  if (/^US\s*\d+/i.test(label)) return 2;
+  if (highway.kind === "trunk") return 3;
+  if (/^(SR|IA|OH|IN|MI|IL|WI|MN|MO|KS|NE|SD|ND|TX|OK|AR|LA|MS|AL|GA|FL|SC|NC|VA|WV|KY|TN|PA|NY|NJ|DE|MD|CT|RI|MA|VT|NH|ME|CA|OR|WA|NV|AZ|UT|CO|NM|ID|MT|WY|AK|HI)\s*\d+/i.test(label)) return 4;
+  if (highway.kind === "primary") return 5;
+  return 6;
+}
+
+function highwayLabelSort(a, b) {
+  return highwayLabelPriority(a) - highwayLabelPriority(b)
+    || highwayLabelText(a.label).localeCompare(highwayLabelText(b.label))
+    || b.points.length - a.points.length;
+}
+
+function highwayLabelPoint(points) {
+  return points[Math.floor(points.length / 2)];
+}
+
+function drawHighwayLabels(context, highways, project, map) {
+  const occupied = [];
+  const seen = new Set();
+  context.save();
+  context.font = "800 13px system-ui, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  highways
+    .filter((highway) => highwayLabelText(highway.label))
+    .sort(highwayLabelSort)
+    .forEach((highway) => {
+      const text = highwayLabelText(highway.label);
+      if (seen.has(text) || occupied.length >= 7) return;
+      const point = highwayLabelPoint(highway.points);
+      if (!point) return;
+      const [x, y] = project(point[0], point[1]);
+      const width = Math.min(context.measureText(text).width + 12, 74);
+      const box = { x: x - width / 2, y: y - 10, width, height: 20 };
+      if (!boxInsideMap(box, map) || occupied.some((other) => boxesOverlap(box, other, 8))) return;
+
+      context.fillStyle = "rgba(255,255,255,.88)";
+      context.fillRect(box.x, box.y, box.width, box.height);
+      context.strokeStyle = "rgba(36,58,67,.32)";
+      context.lineWidth = 1;
+      context.strokeRect(box.x, box.y, box.width, box.height);
+      context.fillStyle = "#243a43";
+      context.fillText(text.length > 12 ? `${text.slice(0, 10)}...` : text, x, y + 1);
+      occupied.push(box);
+      seen.add(text);
+    });
+  context.restore();
+  return occupied;
+}
+
+function drawHighways(context, highways, project, map) {
+  if (!highways.length) return [];
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  highways.forEach((highway) => {
+    context.strokeStyle = "rgba(255,255,255,.78)";
+    context.lineWidth = highwayCasingWidth(highway.kind);
+    drawPolyline(context, highway.points, project);
+  });
+  highways.forEach((highway) => {
+    context.strokeStyle = highwayColor(highway.kind);
+    context.lineWidth = highwayStrokeWidth(highway.kind);
+    drawPolyline(context, highway.points, project);
+  });
+  context.restore();
+  return drawHighwayLabels(context, highways, project, map);
+}
+
+function drawPlaceLabels(context, places, project, map, occupied) {
+  const placed = [];
+  context.save();
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.font = "700 22px system-ui, sans-serif";
+  places.forEach(({ name, longitude, latitude }) => {
+    const [x, y] = project(longitude, latitude);
+    const dotBox = { x: x - 5, y: y - 5, width: 10, height: 10 };
+    const textWidth = context.measureText(name).width;
+    const candidates = [
+      { x: x + 8, y: y - 28, width: textWidth, height: 26, textX: x + 8, textY: y - 7 },
+      { x: x + 8, y: y + 2, width: textWidth, height: 26, textX: x + 8, textY: y + 23 },
+      { x: x - textWidth - 8, y: y - 28, width: textWidth, height: 26, textX: x - textWidth - 8, textY: y - 7 },
+      { x: x - textWidth - 8, y: y + 2, width: textWidth, height: 26, textX: x - textWidth - 8, textY: y + 23 },
+    ];
+    const labelBox = firstAvailableBox(candidates, [...occupied, ...placed], map);
+    if (!labelBox || [...occupied, ...placed].some((box) => boxesOverlap(dotBox, box, 2))) return;
+
+    context.fillStyle = "#16252c";
+    context.beginPath();
+    context.arc(x, y, 4, 0, Math.PI * 2);
+    context.fill();
+    context.lineWidth = 5;
+    context.strokeStyle = "#f9f5e7";
+    context.strokeText(name, labelBox.textX, labelBox.textY);
+    context.fillText(name, labelBox.textX, labelBox.textY);
+    placed.push(labelBox, dotBox);
+  });
+  context.restore();
+  return placed.length / 2;
+}
+
 async function renderAlertGraphic() {
   if (!selectedAlert) return;
   elements["create-graphic"].disabled = true;
   elements["create-graphic"].textContent = "Building graphic…";
+  setGraphicStatus("Preparing alert graphic…");
   try {
-    const boundary = await getCountyGeometry();
+    let boundary = null;
+    try {
+      boundary = await getCountyGeometry();
+    } catch {
+      boundary = fallbackCountyGeometry(selectedAlert);
+    }
+    if (!boundary) throw new Error("No county boundary or alert geometry available");
     const canvas = elements["alert-graphic"];
     const context = canvas.getContext("2d");
     const width = canvas.width;
@@ -1492,7 +1961,8 @@ async function renderAlertGraphic() {
     context.textBaseline = "middle";
     context.fillText(`${trainingMode ? "TRAINING · " : ""}${selectedAlert.event}`, width / 2, titleHeight / 2);
 
-    const bounds = geometryBounds(boundary);
+    const bounds = combineBounds(boundary, selectedAlert.geometry);
+    if (!bounds) throw new Error("No drawable geometry available");
     const map = { x: sidebarWidth, y: titleHeight, width: width - sidebarWidth, height: height - titleHeight };
     const padding = 48;
     const project = (longitude, latitude) => [
@@ -1507,28 +1977,26 @@ async function renderAlertGraphic() {
     context.rect(map.x, map.y, map.width, map.height);
     context.clip();
     drawGeometry(context, boundary, project, { fill: "#f9f5e7", stroke: "#3b4e56", lineWidth: 4 });
-    drawGeometry(context, selectedAlert.geometry || boundary, project, { fill: `${eventColor}b8`, stroke: eventColor, lineWidth: 5 });
+    if (!elements["graphic-dialog"].open) elements["graphic-dialog"].showModal();
 
-    const places = selectedCounty.code === DEFAULT_COUNTY.code ? [
-      ["Van Wert", -84.5841, 40.8695], ["Convoy", -84.7022, 40.9167],
-      ["Wren", -84.7747, 40.8006], ["Willshire", -84.7925, 40.7484],
-      ["Ohio City", -84.6175, 40.7714], ["Middle Point", -84.4477, 40.8556],
-      ["Venedocia", -84.4572, 40.7853], ["Scott", -84.5833, 40.9878],
-    ] : [];
-    context.textAlign = "left";
-    context.textBaseline = "alphabetic";
-    context.font = "700 22px system-ui, sans-serif";
-    places.forEach(([name, longitude, latitude]) => {
-      const [x, y] = project(longitude, latitude);
-      context.fillStyle = "#16252c";
-      context.beginPath();
-      context.arc(x, y, 4, 0, Math.PI * 2);
-      context.fill();
-      context.lineWidth = 5;
-      context.strokeStyle = "#f9f5e7";
-      context.strokeText(name, x + 8, y - 7);
-      context.fillText(name, x + 8, y - 7);
-    });
+    setGraphicStatus("Loading major highways for the map area…");
+    const highwayResult = await majorHighwaysForBounds(bounds);
+    const highways = highwayResult.highways;
+    drawGeometry(context, selectedAlert.geometry || boundary, project, { fill: `${eventColor}66` });
+    context.save();
+    if (traceGeometryPath(context, boundary, project)) context.clip("evenodd");
+    const roadLabelBoxes = drawHighways(context, highways, project, map);
+    context.restore();
+    drawGeometry(context, selectedAlert.geometry || boundary, project, { stroke: eventColor, lineWidth: 5 });
+    const highwayStatus = highwayResult.truncated
+      ? `Added ${highways.length} of ${highwayResult.total} major highway segments; some breaks may remain because the result was capped.`
+      : highways.length
+        ? `Added ${highways.length} merged major highway segment${highways.length === 1 ? "" : "s"} from ${highwayResult.rawTotal || highways.length} OSM way${(highwayResult.rawTotal || highways.length) === 1 ? "" : "s"}.`
+      : "No major highway geometry was available for this map area.";
+
+    const places = await placesForGraphic(selectedAlert, bounds);
+    const placeStatus = elements["graphic-status"].textContent;
+    const placedCount = drawPlaceLabels(context, places, project, map, roadLabelBoxes);
     if (!places.length) {
       const [x, y] = project((bounds.minLon + bounds.maxLon) / 2, (bounds.minLat + bounds.maxLat) / 2);
       context.textAlign = "center";
@@ -1538,6 +2006,7 @@ async function renderAlertGraphic() {
       context.strokeText(currentCountyName(), x, y);
       context.fillText(currentCountyName(), x, y);
     }
+    setGraphicStatus(`${placeStatus}${places.length && placedCount < places.length ? ` Drew ${placedCount} labels to avoid overlaps.` : ""} ${highwayStatus}`);
     context.restore();
 
     context.textAlign = "left";
@@ -1570,9 +2039,11 @@ async function renderAlertGraphic() {
     context.font = "700 15px system-ui, sans-serif";
     context.fillText(`Source: NWS · Issued ${formatDateTime(selectedAlert.sent)}`, width - 22, height - 18);
 
-    elements["graphic-dialog"].showModal();
+    if (!elements["graphic-dialog"].open) elements["graphic-dialog"].showModal();
   } catch (error) {
-    elements["copy-status"].textContent = "The alert graphic could not be generated because the county boundary was unavailable.";
+    const message = "The alert graphic could not be generated because no county boundary or alert polygon was available.";
+    elements["copy-status"].textContent = message;
+    setGraphicStatus(message);
   } finally {
     elements["create-graphic"].disabled = false;
     elements["create-graphic"].textContent = "Create alert graphic";
@@ -1681,6 +2152,7 @@ async function changeCounty(event) {
   const code = event.target.value || DEFAULT_COUNTY.code;
   selectedCounty = { code, name: countyNameByCode.get(code) || code };
   updateCountyLabels();
+  updateCountySelectAlertClass();
   if (selectedIncident && !selectedIncident.closedAt) {
     selectedIncident.closedAt = new Date().toISOString();
     stopActiveSirenCycles(tornadoOperations(), selectedIncident.closedAt);

@@ -241,7 +241,10 @@ export function generateFacebookMessage(alert, countyName = "Van Wert County") {
 }
 
 export function extractLocations(description) {
-  const match = (description || "").match(/Locations impacted include\.\.\.\s*([\s\S]*?)(?:\n\s*\n|This includes|$)/i);
+  const source = description || "";
+  const match = source.match(/Locations impacted include\.\.\.\s*([\s\S]*?)(?:\n\s*\n|This includes|$)/i)
+    || source.match(/including the cit(?:y|ies) of\s+([\s\S]*?)(?:\.|\n\s*\n|$)/i)
+    || source.match(/including\s+([\s\S]*?)(?:\.|\n\s*\n|$)/i);
   if (!match) return "";
   return cleanText(match[1]).replace(/,?\s+and\s+/i, ", and ");
 }

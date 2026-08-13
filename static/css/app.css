@@ -59,7 +59,11 @@ button:disabled { cursor: wait; opacity: .6; }
 .count-badge { padding: .3rem .65rem; background: rgba(255,255,255,.12); border-radius: 999px; font-size: .8rem; font-weight: 800; }
 .county-picker { display: grid; gap: .15rem; min-width: min(260px, 45vw); color: #bed0d9; font-size: .68rem; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
 .county-picker select { min-height: 34px; padding: .35rem 1.9rem .35rem .6rem; color: white; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.28); font-size: .82rem; font-weight: 800; text-transform: none; letter-spacing: 0; }
+.county-picker select.warning { color: #8b1a2a; background: var(--red-soft); border-color: #e49aa5; }
+.county-picker select.watch { color: #635000; background: var(--yellow-soft); border-color: #d8bd52; }
 .county-picker select option { color: var(--ink); background: white; }
+.county-picker select option.warning { color: #8b1a2a; background: var(--red-soft); }
+.county-picker select option.watch { color: #635000; background: var(--yellow-soft); }
 .sound-toggle.enabled { color: #075238; background: #dff5ea; border-color: #78c5a2; }
 
 .notice { margin-bottom: 1rem; padding: .9rem 1rem; border-radius: 10px; font-weight: 650; }
@@ -249,6 +253,7 @@ footer p { margin: .3rem; }
 .training-form label span { display: block; margin-bottom: .4rem; color: var(--navy); font-size: .78rem; font-weight: 850; }
 .canvas-wrap { margin: 0 1.4rem; background: #172b34; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
 #alert-graphic { display: block; width: 100%; height: auto; }
+.graphic-status { min-height: 1.35em; margin: .65rem 1.4rem 0; color: var(--muted); font-size: .78rem; font-weight: 700; }
 
 .spotter-panel { scroll-margin-top: 1rem; }
 .spotter-panel .spotter-section { margin-left: 0; margin-right: 0; }
