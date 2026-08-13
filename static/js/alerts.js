@@ -347,6 +347,20 @@ function wrapRadioMessage(message, countyName = "Van Wert County") {
   return `${introduction} ${message} ${signoff}`;
 }
 
+function warningActionSentence(event) {
+  if (event === "Tornado Warning") {
+    return "Take shelter now in an interior room on the lowest floor, away from windows.";
+  }
+  return "Move indoors now and stay away from windows until the storm passes.";
+}
+
+function radioLocationSentence(description) {
+  const locations = extractLocations(description)
+    .replace(/[.]+$/, "")
+    .replace(/,\s+and\s+/i, " and ");
+  return locations ? `NWS named locations include ${locations}.` : "";
+}
+
 export function generateRadioMessage(alert, countyName = "Van Wert County") {
   const event = alert.event || "weather alert";
   const area = affectedCountyArea(alert, countyName);
@@ -373,17 +387,14 @@ export function generateRadioMessage(alert, countyName = "Van Wert County") {
 
   const hazard = hazards(alert);
   const hazardSentence = hazard ? `Hazards include ${hazard}.` : "";
-  const locations = extractLocations(alert.description);
-  const locationSentence = locations ? `Locations named by the National Weather Service include ${locations}.` : "";
+  const locationSentence = radioLocationSentence(alert.description);
 
   if (event === "Tornado Warning") {
     const source = tornadoSourceSentence(alert);
-    const instruction = cleanText(alert.instruction) || "Move to an interior room on the lowest floor of a sturdy building, away from windows.";
-    return wrapRadioMessage([start, source, locationSentence, "A Tornado Warning means a tornado is occurring or may occur soon.", instruction, again].filter(Boolean).join(" "), countyName);
+    return wrapRadioMessage([start, source, locationSentence, warningActionSentence(event), again].filter(Boolean).join(" "), countyName);
   }
 
-  const instruction = cleanText(alert.instruction) || "Move indoors to an interior room on the lowest floor of a sturdy building.";
-  return wrapRadioMessage([start, hazardSentence, locationSentence, "A Severe Thunderstorm Warning means severe weather is occurring or imminent.", instruction, again].filter(Boolean).join(" "), countyName);
+  return wrapRadioMessage([start, hazardSentence, locationSentence, warningActionSentence(event), again].filter(Boolean).join(" "), countyName);
 }
 
 export function channelsFor(alert) {

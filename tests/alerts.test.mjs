@@ -41,8 +41,16 @@ assert.equal(hazards(severe), "wind gusts up to 60 mph and 1-inch hail");
 assert.equal(extractLocations(severe.description), "Van Wert, Ohio City, Middle Point, and Wren.");
 assert.match(generateRadioMessage(severe), /southern Van Wert County until 10:30 PM EDT/);
 assert.match(generateRadioMessage(severe), /wind gusts up to 60 mph and 1-inch hail/);
+assert.match(generateRadioMessage(severe), /Move indoors now and stay away from windows until the storm passes/);
 assert.match(generateRadioMessage(severe), /^This is the Van Wert County Emergency Management Agency with a special weather statement\./);
 assert.match(generateRadioMessage(severe), /Authority of the National Weather Service\. This is the Van Wert County EMA KNM906\.$/);
+
+const wordyInstruction = {
+  ...severe,
+  instruction: "For your protection move to an interior room on the lowest floor of a building. Large hail, damaging wind, and continuous cloud to ground lightning are occurring with this storm. Move indoors immediately. Lightning is one of nature's leading killers. Remember, if you can hear thunder, you are close enough to be struck by lightning. Torrential rainfall is occurring with this storm, and may lead to flash flooding. Do not drive your vehicle through flooded roadways.",
+};
+assert.doesNotMatch(generateRadioMessage(wordyInstruction), /Lightning is one of nature's leading killers/);
+assert.doesNotMatch(generateRadioMessage(wordyInstruction), /Do not drive your vehicle through flooded roadways/);
 
 const cancelled = {
   ...severe,
