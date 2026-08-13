@@ -21,6 +21,7 @@
     </div>
     <div class="header-actions">
       <button id="install-app" class="button secondary hidden" type="button">Install app</button>
+      <button id="open-national-map" class="button secondary" type="button">US Map</button>
       <button id="start-incident" class="button primary" type="button">Start incident</button>
       <button id="complete-incident" class="button secondary hidden" type="button">Complete incident</button>
       <button id="report-button" class="button secondary" type="button" disabled>Report / Print</button>
@@ -87,11 +88,11 @@
         <p class="field-help">Review the message against the official alert before broadcasting. Your edits are saved on this device.</p>
 
         <div class="message-actions">
-          <button id="copy-message" class="button primary" type="button">Copy message</button>
-          <button id="create-graphic" class="button secondary" type="button">Create alert graphic</button>
-          <button id="create-regional-graphic" class="button secondary" type="button">Create regional graphic</button>
-          <button id="reset-message" class="button secondary" type="button">Restore generated copy</button>
-          <a id="official-alert-link" class="button secondary" href="#" target="_blank" rel="noopener">Open official alert</a>
+          <button id="copy-message" class="button primary" type="button">Copy</button>
+          <button id="create-graphic" class="button secondary" type="button">Alert Graphic</button>
+          <button id="create-regional-graphic" class="button secondary" type="button">Regional Graphic</button>
+          <button id="reset-message" class="button secondary" type="button">Restore</button>
+          <a id="official-alert-link" class="button secondary" href="#" target="_blank" rel="noopener">Official Alert</a>
         </div>
         <div id="copy-status" class="sr-status" aria-live="polite"></div>
 
@@ -311,7 +312,7 @@
       </div>
       <button class="icon-button dialog-close" type="button" data-close-dialog="training-dialog" aria-label="Close training lab">×</button>
     </div>
-    <p class="dialog-note">Generate a clearly marked test alert, then select <strong>Create alert graphic</strong>. Generate again to add another alert to the same training incident. Random polygon creates a new shape every time.</p>
+    <p class="dialog-note">Generate a clearly marked test alert, then select <strong>Alert Graphic</strong>. Generate again to add another alert to the same training incident. Random polygon creates a new shape every time.</p>
     <div class="training-form">
       <label>
         <span>Alert type</span>
@@ -357,6 +358,41 @@
     <div class="dialog-actions">
       <button id="download-graphic" class="button primary" type="button">Download PNG</button>
       <button class="button secondary" type="button" data-close-dialog="graphic-dialog">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="national-map-dialog" class="app-dialog national-map-dialog">
+    <div class="dialog-heading national-map-heading">
+      <div>
+        <p class="section-kicker">National alert map</p>
+        <h2>Active U.S. weather alerts</h2>
+      </div>
+      <div class="national-map-actions">
+        <label class="national-office-filter" for="national-office-select">
+          <span>NWS office</span>
+          <select id="national-office-select">
+            <option value="">All offices</option>
+          </select>
+        </label>
+        <button id="national-map-zoom-out" class="button tiny secondary" type="button" aria-label="Zoom out">-</button>
+        <button id="national-map-zoom-in" class="button tiny secondary" type="button" aria-label="Zoom in">+</button>
+        <button id="national-map-reset" class="button tiny secondary" type="button">Reset</button>
+        <button class="icon-button dialog-close" type="button" data-close-dialog="national-map-dialog" aria-label="Close national alert map">×</button>
+      </div>
+    </div>
+    <p id="national-map-status" class="dialog-note" aria-live="polite">Loading national alert map...</p>
+    <div class="national-map-wrap">
+      <svg id="national-map-svg" viewBox="0 0 1000 620" role="img" aria-labelledby="national-map-title national-map-desc">
+        <title id="national-map-title">National United States map of active weather alerts</title>
+        <desc id="national-map-desc">County boundaries, major cities, and current National Weather Service alerts.</desc>
+        <rect class="national-map-ocean" width="1000" height="620"></rect>
+        <g id="national-map-viewport"></g>
+      </svg>
+    </div>
+    <div class="national-map-legend" aria-label="Map legend">
+      <span><i class="legend-swatch warning"></i> Warning</span>
+      <span><i class="legend-swatch watch"></i> Watch</span>
+      <span><i class="legend-swatch advisory"></i> Advisory / statement</span>
     </div>
   </dialog>
 
