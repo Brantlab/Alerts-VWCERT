@@ -310,6 +310,29 @@
       </section>
     </section>
 
+    <section id="calendar-events-section" class="panel calendar-events-panel hidden" aria-labelledby="calendar-events-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Approved calendar</p>
+          <h2 id="calendar-events-heading">Previous and next 24 hours</h2>
+        </div>
+        <div class="section-actions">
+          <button id="refresh-calendar-events" class="button compact secondary" type="button">Refresh</button>
+          <button id="collapse-calendar-events" class="button compact secondary" type="button">Close events</button>
+        </div>
+      </div>
+      <div class="calendar-module-meta">
+        <p id="calendar-events-window">Loading event window…</p>
+        <p id="calendar-events-status" role="status">Loading approved events…</p>
+      </div>
+      <div class="table-scroll">
+        <table class="staff-table calendar-events-table">
+          <thead><tr><th>Status</th><th>Event and time</th><th>Address</th><th>POC</th><th>Phone</th><th>Notes</th></tr></thead>
+          <tbody id="calendar-events-list"><tr><td class="empty-table" colspan="6">Loading approved events…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="bottom-actions" aria-label="Additional incident tools">
       <button id="spotter-activation-button" class="bottom-action-button" type="button" aria-controls="spotter-panel" aria-expanded="false">
         <span class="bottom-action-icon" aria-hidden="true">◎</span>
@@ -322,6 +345,10 @@
       <button id="recent-incidents-button" class="bottom-action-button" type="button">
         <span class="bottom-action-icon" aria-hidden="true">↶</span>
         <span><strong>Recent incidents</strong><small>Review saved reports and activity</small></span>
+      </button>
+      <button id="calendar-events-button" class="bottom-action-button" type="button" aria-controls="calendar-events-section" aria-expanded="false">
+        <span class="bottom-action-icon" aria-hidden="true">▦</span>
+        <span><strong>Events</strong><small>Loading 48-hour event window</small></span>
       </button>
     </section>
   </main>

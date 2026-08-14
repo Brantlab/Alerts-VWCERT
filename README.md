@@ -36,6 +36,8 @@ It is designed for a 1920x1080 display and listens to the backend shared-state s
 
 The alert desk header includes a Links menu for calendar approval, Nixle, both EOC displays, the public calendar, spotter check-in, NWS Wilmington, and the Storm Prediction Center.
 
+The alert desk's bottom Events module shows all approved event details for the rolling previous and next 24 hours. The public calendar event detail intentionally omits POC names and phone numbers; those fields remain available to staff in the approval panel and operational displays.
+
 ## Spotter activation page
 
 Departments can check in from:

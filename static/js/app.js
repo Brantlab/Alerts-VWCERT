@@ -39,6 +39,7 @@ const PRESENCE_NAME_KEY = "vwcert-presence-name-v1";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
 const SIREN_DURATION = 3 * 60_000;
+const CALENDAR_WINDOW_MS = 24 * 60 * 60_000;
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
 const SPOTTER_DEPARTMENTS = ["Convoy", "Willshire", "Wren", "Ohio City", "Middle Point", "Scott", "Van Wert", "CERT", "Amateur"];
 const VAN_WERT_PLACES = [
@@ -197,6 +198,7 @@ let sharedStateApplying = false;
 let sharedStateLastUpdatedAt = "";
 let sharedStatePublishTimer = null;
 let backendEvents = null;
+let calendarEvents = [];
 const presenceClientId = sessionStorage.getItem("vwcert-presence-client-id") || crypto.randomUUID();
 sessionStorage.setItem("vwcert-presence-client-id", presenceClientId);
 
@@ -1282,6 +1284,7 @@ function connectBackendEvents() {
       // Ignore malformed shared state payloads.
     }
   });
+  backendEvents.addEventListener("calendar", loadCalendarEvents);
   backendEvents.addEventListener("error", () => {
     setBackendStatus("disconnected");
     setConnectedClients([]);
@@ -2693,6 +2696,7 @@ function openSpotterActivation() {
   }
   if (!selectedIncident) startIncidentSession({ alerts: activeAlerts, isTraining: exerciseMode });
   setStaffingExpanded(false);
+  setCalendarEventsExpanded(false);
   initializeSpotterFromIncident();
   renderSpotterActivation();
   setSpotterExpanded(true);
@@ -2936,8 +2940,106 @@ function toggleStaffing() {
   }
   if (!selectedIncident) startIncidentSession({ alerts: activeAlerts, isTraining: exerciseMode });
   setSpotterExpanded(false);
+  setCalendarEventsExpanded(false);
   renderStaff();
   setStaffingExpanded(true);
+}
+
+function calendarEventStatus(event, now = Date.now()) {
+  const start = new Date(event.start).getTime();
+  const end = new Date(event.end).getTime();
+  if (now >= start && now < end) return "active";
+  return end <= now ? "past" : "upcoming";
+}
+
+function calendarEventTime(event) {
+  return event.allDay
+    ? `${formatDateTime(event.start)} · All day`
+    : `${formatDateTime(event.start)} – ${formatDateTime(event.end)}`;
+}
+
+function renderCalendarEvents() {
+  const body = elements["calendar-events-list"];
+  body.replaceChildren();
+  const sorted = [...calendarEvents].sort((a, b) => new Date(a.start) - new Date(b.start));
+  if (!sorted.length) {
+    const row = document.createElement("tr");
+    const cell = makeElement("td", "empty-table", "No approved events in the previous or next 24 hours.");
+    cell.colSpan = 6;
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+
+  sorted.forEach((event) => {
+    const status = calendarEventStatus(event);
+    const row = document.createElement("tr");
+    row.className = `calendar-event-row ${status}`;
+    const statusCell = document.createElement("td");
+    const statusLabel = status === "active" ? "In progress" : status === "past" ? "Previous" : "Upcoming";
+    statusCell.append(makeElement("span", `calendar-event-status ${status}`, statusLabel));
+    const eventCell = makeElement("td", "calendar-event-title");
+    eventCell.append(makeElement("strong", "", event.name || "Unnamed event"), makeElement("span", "", calendarEventTime(event)));
+    row.append(
+      statusCell,
+      eventCell,
+      makeElement("td", "", event.address || "—"),
+      makeElement("td", "", event.pocName || "—"),
+      makeElement("td", "", event.pocPhone || "—"),
+      makeElement("td", "calendar-event-notes", event.notes || "—"),
+    );
+    body.append(row);
+  });
+}
+
+function updateCalendarEventsButton() {
+  const description = elements["calendar-events-button"].querySelector("small");
+  if (!description) return;
+  description.textContent = calendarEvents.length
+    ? `${calendarEvents.length} approved event${calendarEvents.length === 1 ? "" : "s"} in 48-hour window`
+    : "No approved events in 48-hour window";
+}
+
+async function loadCalendarEvents() {
+  const now = new Date();
+  const from = new Date(now.getTime() - CALENDAR_WINDOW_MS);
+  const to = new Date(now.getTime() + CALENDAR_WINDOW_MS);
+  elements["calendar-events-window"].textContent = `${formatDateTime(from)} – ${formatDateTime(to)}`;
+  try {
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    const response = await fetch(`${BACKEND_API_URL}/api/calendar/events?${params}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(String(response.status));
+    const data = await response.json();
+    calendarEvents = data.events || [];
+    renderCalendarEvents();
+    updateCalendarEventsButton();
+    elements["calendar-events-status"].classList.remove("error");
+    elements["calendar-events-status"].textContent = `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"} · Updated ${formatTime(now)}`;
+  } catch {
+    elements["calendar-events-status"].classList.add("error");
+    elements["calendar-events-status"].textContent = "Calendar unavailable · Retrying automatically";
+    const description = elements["calendar-events-button"].querySelector("small");
+    if (description && !calendarEvents.length) description.textContent = "Calendar currently unavailable";
+  }
+}
+
+function setCalendarEventsExpanded(expanded) {
+  elements["calendar-events-section"].classList.toggle("hidden", !expanded);
+  elements["calendar-events-button"].setAttribute("aria-expanded", String(expanded));
+  if (expanded) requestAnimationFrame(() => elements["calendar-events-section"].scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+function toggleCalendarEvents() {
+  const opening = elements["calendar-events-section"].classList.contains("hidden");
+  if (!opening) {
+    setCalendarEventsExpanded(false);
+    return;
+  }
+  if (!elements["staffing-section"].classList.contains("hidden")) setStaffingExpanded(false);
+  if (!elements["spotter-panel"].classList.contains("hidden")) setSpotterExpanded(false);
+  renderCalendarEvents();
+  setCalendarEventsExpanded(true);
+  loadCalendarEvents();
 }
 
 function staffInput(person, field, placeholder) {
@@ -3920,6 +4022,12 @@ elements["collapse-staffing"].addEventListener("click", () => {
   setStaffingExpanded(false);
   elements["office-staffing-button"].focus();
 });
+elements["calendar-events-button"].addEventListener("click", toggleCalendarEvents);
+elements["collapse-calendar-events"].addEventListener("click", () => {
+  setCalendarEventsExpanded(false);
+  elements["calendar-events-button"].focus();
+});
+elements["refresh-calendar-events"].addEventListener("click", loadCalendarEvents);
 elements["recent-incidents-button"].addEventListener("click", () => {
   renderHistory();
   elements["recent-incidents-dialog"].showModal();
@@ -4012,7 +4120,9 @@ renderAlertSoundControl();
 elements["show-spc-md"].checked = localStorage.getItem(SHOW_SPC_MD_KEY) !== "false";
 elements["presence-name"].value = localStorage.getItem(PRESENCE_NAME_KEY) || "";
 checkBackendStatus();
+loadCalendarEvents();
 setInterval(checkBackendStatus, 60_000);
+setInterval(loadCalendarEvents, 60_000);
 setInterval(pollSharedState, 8_000);
 elements["presence-name"].addEventListener("input", () => {
   clearTimeout(elements["presence-name"]._presenceTimer);

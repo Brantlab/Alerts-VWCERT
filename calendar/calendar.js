@@ -24,7 +24,6 @@ function openEvent(event) {
   elements["detail-name"].textContent = event.name;
   elements["detail-time"].textContent = fullEventTime(event);
   elements["detail-address"].textContent = event.address;
-  elements["detail-poc"].textContent = `${event.pocName} · ${event.pocPhone}`;
   elements["detail-notes"].textContent = event.notes || "No notes provided.";
   elements["event-dialog"].showModal();
 }
