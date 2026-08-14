@@ -258,6 +258,11 @@ input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible
 
 footer { width: min(1180px, calc(100% - 2rem)); margin: 0 auto 2rem; color: var(--muted); font-size: .75rem; text-align: center; }
 footer p { margin: .3rem; }
+.app-footer-meta { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .45rem .75rem; }
+.backend-status { display: inline-flex; align-items: center; gap: .3rem; font-weight: 850; }
+.backend-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); }
+.backend-status.connected::before { background: var(--green); }
+.backend-status.disconnected::before { background: var(--red); }
 .safety-note { font-weight: 650; }
 .noscript { position: fixed; inset: auto 0 0; padding: 1rem; color: white; background: var(--red); text-align: center; }
 .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; }

@@ -25,6 +25,7 @@ const NATIONAL_COUNTIES_URL = "https://raw.githubusercontent.com/plotly/datasets
 const NATIONAL_STATES_URL = "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json";
 const NATIONAL_COUNTY_ZONES_URL = "https://api.weather.gov/zones?type=county&include_geometry=false&limit=5000";
 const SPC_MD_RSS_URL = "https://www.spc.noaa.gov/products/spcmdrss.xml";
+const BACKEND_API_URL = window.VWCERT_API_URL || "https://api.vwcert.org";
 const NATIONAL_RADAR_URL = "https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export?bbox=-125,24,-66.5,50.8&bboxSR=4326&imageSR=4326&size=1200,700&format=png32&transparent=true&f=image";
 const NATIONAL_RADAR_FRAME = { x: 35, y: 30, width: 930, height: 500 };
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
@@ -992,6 +993,31 @@ function affectedArea(alert) {
 
 function setGraphicStatus(message) {
   if (elements["graphic-status"]) elements["graphic-status"].textContent = message || "";
+}
+
+function setBackendStatus(status) {
+  const element = elements["backend-status"];
+  if (!element) return;
+  element.classList.remove("checking", "connected", "disconnected");
+  element.classList.add(status);
+  element.textContent = `Backend: ${status === "connected" ? "connected" : status === "disconnected" ? "disconnected" : "checking"}`;
+}
+
+async function checkBackendStatus() {
+  setBackendStatus("checking");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/health`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    setBackendStatus(response.ok ? "connected" : "disconnected");
+  } catch {
+    setBackendStatus("disconnected");
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function impactedPlaceNames(alert) {
@@ -3611,6 +3637,8 @@ if (restoredIncidentId) {
 ensureOperationsTimer();
 renderAlertSoundControl();
 elements["show-spc-md"].checked = localStorage.getItem(SHOW_SPC_MD_KEY) !== "false";
+checkBackendStatus();
+setInterval(checkBackendStatus, 60_000);
 document.addEventListener("pointerdown", () => {
   if (alertSoundEnabled) getAlertAudioContext()?.resume();
 }, { once: true });
