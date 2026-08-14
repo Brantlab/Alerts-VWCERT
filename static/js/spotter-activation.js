@@ -61,8 +61,7 @@ function allUnits() {
 
 function departmentUnits() {
   const department = elements.department.value;
-  const owned = new Set(unitIds());
-  return allUnits().filter((unit) => unit.department === department || owned.has(unit.id));
+  return allUnits().filter((unit) => unit.department === department);
 }
 
 function unitPayload(unit = {}) {
@@ -96,102 +95,42 @@ async function removeUnit(id) {
   renderState(payload.state);
 }
 
-function renderManagedUnits() {
-  elements["managed-unit-list"].replaceChildren();
-  if (!elements.department.value) {
-    const empty = document.createElement("div");
-    empty.className = "unit-card";
-    empty.textContent = "Select a department to manage its units.";
-    elements["managed-unit-list"].append(empty);
-    return;
-  }
-  const units = departmentUnits();
-  if (!units.length) {
-    const empty = document.createElement("div");
-    empty.className = "unit-card";
-    empty.textContent = "No units for this department yet.";
-    elements["managed-unit-list"].append(empty);
-    return;
-  }
-  units.forEach((unit) => {
-    const card = document.createElement("div");
-    card.className = "managed-unit-card";
-
-    const unitLabel = document.createElement("label");
-    unitLabel.textContent = "Unit";
-    const unitInput = document.createElement("input");
-    unitInput.value = unit.unitNumber || "";
-    unitLabel.append(unitInput);
-
-    const locationLabel = document.createElement("label");
-    locationLabel.textContent = "Location";
-    const locationInput = document.createElement("input");
-    locationInput.value = unit.location || "";
-    locationLabel.append(locationInput);
-
-    const statusLabel = document.createElement("label");
-    statusLabel.textContent = "Status";
-    const statusSelect = document.createElement("select");
-    ["Available", "Monitoring", "En route", "On scene", "Unavailable"].forEach((status) => {
-      const option = document.createElement("option");
-      option.value = status;
-      option.textContent = status;
-      statusSelect.append(option);
-    });
-    statusSelect.value = unit.status || "Available";
-    statusLabel.append(statusSelect);
-
-    const saveButton = document.createElement("button");
-    saveButton.type = "button";
-    saveButton.className = "secondary-button";
-    saveButton.textContent = "Save";
-    saveButton.addEventListener("click", async () => {
-      try {
-        await saveUnit({ ...unitPayload(unit), unitNumber: unitInput.value, location: locationInput.value, status: statusSelect.value });
-        setSaveStatus(`${unitInput.value || "Unit"} updated at ${formatTime(new Date().toISOString())}.`, "ok");
-      } catch (error) {
-        setSaveStatus(error.message || "Update failed.", "error");
-      }
-    });
-
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "danger-button";
-    removeButton.textContent = "Remove";
-    removeButton.addEventListener("click", async () => {
-      try {
-        await removeUnit(unit.id);
-        setSaveStatus(`${unit.unitNumber || "Unit"} removed.`, "ok");
-      } catch (error) {
-        setSaveStatus(error.message || "Remove failed.", "error");
-      }
-    });
-
-    card.append(unitLabel, locationLabel, statusLabel, saveButton, removeButton);
-    elements["managed-unit-list"].append(card);
-  });
-}
-
 function renderAllUnits() {
-  const units = allUnits();
+  const department = elements.department.value;
+  const units = department ? departmentUnits() : allUnits();
   elements["unit-list"].replaceChildren();
   if (!units.length) {
     const empty = document.createElement("div");
     empty.className = "unit-card";
-    empty.textContent = "No units checked in yet.";
+    empty.textContent = department ? `No ${department} units checked in yet.` : "No units checked in yet.";
     elements["unit-list"].append(empty);
     return;
   }
   units.forEach((unit) => {
     const card = document.createElement("div");
     card.className = "unit-card";
+    const content = document.createElement("div");
     const heading = document.createElement("strong");
     heading.textContent = `${unit.department || "Department"} - ${unit.unitNumber || "Unit"}`;
     const detail = document.createElement("span");
     detail.textContent = `${unit.status || "Available"} - ${unit.location || "Location not provided"} - Updated ${formatTime(unit.updatedAt)}`;
-    card.append(heading, detail);
+    content.append(heading, detail);
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "secondary-button";
+    editButton.textContent = "Edit";
+    editButton.addEventListener("click", () => openEditDialog(unit));
+    card.append(content, editButton);
     elements["unit-list"].append(card);
   });
+}
+
+function openEditDialog(unit) {
+  elements["edit-unit-id"].value = unit.id;
+  elements["edit-unit-number"].value = unit.unitNumber || "";
+  elements["edit-location"].value = unit.location || "";
+  elements["edit-status"].value = unit.status || "Available";
+  elements["edit-unit-dialog"].showModal();
 }
 
 function renderState(state) {
@@ -201,7 +140,6 @@ function renderState(state) {
     ? `${incident.isTraining ? "TRAINING - " : ""}${incident.countyName || state.activeCounty?.name || "Active incident"} is open.`
     : "No open shared incident. Check with EMA before submitting.";
   elements["submit-button"].disabled = !incident || Boolean(incident.closedAt) || !elements.department.value;
-  renderManagedUnits();
   renderAllUnits();
 }
 
@@ -244,5 +182,36 @@ elements.department.addEventListener("change", () => {
   renderState(latestState);
 });
 elements.status.addEventListener("change", saveLocalForm);
+elements["edit-unit-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const existing = allUnits().find((unit) => unit.id === elements["edit-unit-id"].value);
+  if (!existing) return;
+  try {
+    const unit = await saveUnit({
+      ...unitPayload(existing),
+      unitNumber: elements["edit-unit-number"].value,
+      location: elements["edit-location"].value,
+      status: elements["edit-status"].value,
+    });
+    elements["edit-unit-dialog"].close();
+    setSaveStatus(`${unit.unitNumber || "Unit"} updated at ${formatTime(unit.updatedAt)}.`, "ok");
+  } catch (error) {
+    setSaveStatus(error.message || "Update failed.", "error");
+  }
+});
+elements["delete-unit"].addEventListener("click", async () => {
+  const id = elements["edit-unit-id"].value;
+  const unit = allUnits().find((entry) => entry.id === id);
+  try {
+    await removeUnit(id);
+    elements["edit-unit-dialog"].close();
+    setSaveStatus(`${unit?.unitNumber || "Unit"} removed.`, "ok");
+  } catch (error) {
+    setSaveStatus(error.message || "Remove failed.", "error");
+  }
+});
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => elements[button.dataset.closeDialog].close());
+});
 pollState();
 setInterval(pollState, 10_000);

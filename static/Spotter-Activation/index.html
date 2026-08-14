@@ -54,15 +54,44 @@
 
       <p id="save-status" class="save-status" role="status">Select your department, then add each responding unit.</p>
       <section class="active-units">
-        <h2>Your Department Units</h2>
-        <div id="managed-unit-list" class="managed-unit-list"></div>
-      </section>
-      <section class="active-units">
-        <h2>All Checked-In Units</h2>
+        <h2>Checked-In Units</h2>
         <div id="unit-list" class="unit-list"></div>
       </section>
     </section>
   </main>
+
+  <dialog id="edit-unit-dialog" class="edit-unit-dialog">
+    <form id="edit-unit-form" method="dialog">
+      <div class="dialog-heading">
+        <h2>Edit Unit</h2>
+        <button class="icon-button" type="button" data-close-dialog="edit-unit-dialog" aria-label="Close">×</button>
+      </div>
+      <input id="edit-unit-id" type="hidden">
+      <label>
+        Unit number
+        <input id="edit-unit-number" type="text" required>
+      </label>
+      <label>
+        Current location
+        <input id="edit-location" type="text">
+      </label>
+      <label>
+        Status
+        <select id="edit-status">
+          <option>Available</option>
+          <option>Monitoring</option>
+          <option>En route</option>
+          <option>On scene</option>
+          <option>Unavailable</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button id="delete-unit" class="danger-button" type="button">Remove</button>
+        <button class="secondary-button" type="button" data-close-dialog="edit-unit-dialog">Cancel</button>
+        <button id="save-unit" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
   <script type="module" src="../js/spotter-activation.js"></script>
 </body>
 </html>

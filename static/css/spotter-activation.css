@@ -32,17 +32,22 @@ button:disabled { opacity: .65; cursor: wait; }
 .save-status.error { color: var(--red); }
 .active-units { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .active-units h2 { margin: 0 0 .75rem; color: var(--navy); font-size: 1.1rem; }
-.unit-list, .managed-unit-list { display: grid; gap: .55rem; }
-.unit-card { padding: .7rem .8rem; background: #f4f7f8; border-left: 5px solid var(--teal); border-radius: 8px; }
+.unit-list { display: grid; gap: .55rem; }
+.unit-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .75rem; padding: .7rem .8rem; background: #f4f7f8; border-left: 5px solid var(--teal); border-radius: 8px; }
 .unit-card strong { display: block; color: var(--navy); }
 .unit-card span { display: block; margin-top: .2rem; color: var(--muted); font-size: .9rem; font-weight: 750; }
-.managed-unit-card { display: grid; grid-template-columns: minmax(84px, .75fr) minmax(150px, 1.2fr) minmax(110px, .7fr) auto auto; align-items: end; gap: .5rem; width: 100%; max-width: 100%; padding: .75rem; background: #f4f7f8; border: 1px solid var(--line); border-left: 5px solid var(--teal); border-radius: 8px; }
-.managed-unit-card label { min-width: 0; }
-.managed-unit-card input, .managed-unit-card select { width: 100%; min-width: 0; }
-.managed-unit-card button { min-width: 74px; padding-inline: .55rem; }
+.unit-card .secondary-button { min-width: 70px; min-height: 36px; }
+.edit-unit-dialog { width: min(520px, calc(100% - 2rem)); padding: 0; border: 0; border-radius: 12px; box-shadow: 0 20px 70px rgba(20,48,65,.28); }
+.edit-unit-dialog::backdrop { background: rgba(10,38,57,.38); }
+.edit-unit-dialog form { display: grid; grid-template-columns: 1fr; gap: .85rem; padding: 1.25rem; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.dialog-heading h2 { margin: 0; color: var(--navy); font-size: 1.35rem; }
+.icon-button { display: grid; place-items: center; width: 36px; min-height: 36px; color: var(--navy); background: white; border: 1px solid #b7c7ce; border-radius: 8px; font-size: 1.35rem; line-height: 1; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: .25rem; }
 
 @media (max-width: 760px) {
   form { grid-template-columns: 1fr; }
-  .managed-unit-card { grid-template-columns: 1fr 1fr; }
-  .managed-unit-card label { grid-column: 1 / -1; }
+  .unit-card { grid-template-columns: 1fr; }
+  .unit-card .secondary-button { width: 100%; }
+  .dialog-actions { display: grid; grid-template-columns: 1fr; }
 }
