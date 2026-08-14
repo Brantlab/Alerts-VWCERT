@@ -24,6 +24,16 @@ Deploy the generated `public/` directory to any HTTPS static host. HTTPS is requ
 
 Pushes to `main` automatically build and deploy the site with the GitHub Pages workflow in `.github/workflows/pages.yaml`. The workflow supplies the repository-specific base URL during the Hugo build.
 
+## EOC display
+
+The read-only EOC wall display is available at:
+
+```txt
+/EOC-Display/
+```
+
+It is designed for a 1920x1080 display and listens to the backend shared-state stream. It shows the selected county/alert, radio message, latest activity logs, tornado siren status, spotter activation, office staffing, incident notes, backend status, and connected clients. The page identifies itself to presence as `EOC Display`.
+
 ## VPS backend
 
 The repo includes a small Dockerized backend scaffold for the shared API work. The frontend can remain on GitHub Pages while the backend runs on a VPS behind Cloudflare Tunnel.

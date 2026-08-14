@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a2639">
+  <title>VW CERT EOC Display</title>
+  <link rel="stylesheet" href="../css/eoc-display.css">
+</head>
+<body>
+  <main class="eoc-shell">
+    <header class="eoc-header">
+      <div>
+        <p class="eyebrow">Van Wert County EMA</p>
+        <h1>EOC Weather Operations</h1>
+      </div>
+      <div class="header-metrics">
+        <div>
+          <span>Current Time</span>
+          <strong id="clock">--:--</strong>
+        </div>
+        <div>
+          <span>Backend</span>
+          <strong id="backend-status" class="status checking">Checking</strong>
+        </div>
+        <div>
+          <span>Shared State</span>
+          <strong id="shared-status" class="status idle">Waiting</strong>
+        </div>
+      </div>
+    </header>
+
+    <section class="alert-band">
+      <div>
+        <p id="county-label">County: --</p>
+        <h2 id="alert-title">Waiting for shared alert</h2>
+        <p id="alert-area">No active shared incident has been received.</p>
+      </div>
+      <div class="alert-facts">
+        <div><span>Expires</span><strong id="alert-expires">--</strong></div>
+        <div><span>Incident</span><strong id="incident-status">--</strong></div>
+        <div><span>Operator</span><strong id="operator-name">--</strong></div>
+      </div>
+    </section>
+
+    <section class="eoc-grid">
+      <article class="panel radio-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Prepared Broadcast</p>
+          <h3>Radio Message</h3>
+        </div>
+        <p id="radio-message" class="radio-message">No radio message selected.</p>
+      </article>
+
+      <article class="panel logs-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Activity</p>
+          <h3>Latest Log Entries</h3>
+        </div>
+        <ol id="activity-log" class="activity-log"></ol>
+      </article>
+
+      <article class="panel siren-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Tornado Operations</p>
+          <h3>Sirens</h3>
+        </div>
+        <div id="siren-summary" class="siren-summary">No siren activity.</div>
+        <div id="siren-grid" class="siren-grid"></div>
+      </article>
+
+      <article class="panel spotter-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Field Operations</p>
+          <h3>Spotter Activation</h3>
+        </div>
+        <div id="spotter-summary" class="spotter-summary">No spotter activation recorded.</div>
+        <table>
+          <thead><tr><th>Dept</th><th>Activated</th><th>Cleared</th></tr></thead>
+          <tbody id="spotter-table"></tbody>
+        </table>
+      </article>
+
+      <article class="panel staffing-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">EOC</p>
+          <h3>Staffing</h3>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>In</th><th>Out</th></tr></thead>
+          <tbody id="staff-table"></tbody>
+        </table>
+      </article>
+
+      <article class="panel notes-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Incident</p>
+          <h3>Notes</h3>
+        </div>
+        <p id="incident-notes" class="incident-notes">No notes recorded.</p>
+        <div class="connected">
+          <strong>Connected</strong>
+          <span id="connected-clients">--</span>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script type="module" src="../js/eoc-display.js"></script>
+</body>
+</html>
