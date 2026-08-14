@@ -42,7 +42,7 @@ Departments can check in from:
 /Spotter-Activation/
 ```
 
-They select a department, then add one or more unit numbers with locations and statuses. Units can be updated or removed by that department page. Check-ins are saved to the backend shared incident state and appear in the main portal's spotter activation panel and on the EOC display. An open shared incident is required before units can submit.
+They select a department, then add one or more unit numbers with locations and statuses. Units can be updated or removed by that department page, and each checked-in unit can send a spotter report with its observed location and report text. Check-ins and reports are saved to the backend shared incident state and appear in the main portal's spotter activation panel and on the EOC display. An open shared incident is required before units can submit.
 
 ## VPS backend
 
@@ -109,6 +109,7 @@ Current backend endpoints:
 - `PUT /api/presence/client` updates the connected browser's display name.
 - `PUT /api/spotter/unit` saves a department unit check-in to the open shared incident.
 - `DELETE /api/spotter/unit?id=...` removes a department unit check-in.
+- `PUT /api/spotter/report` saves a unit spotter report to the open shared incident.
 - `GET /api/events` streams shared state and connected-client updates with Server-Sent Events.
 
 Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.
@@ -128,7 +129,7 @@ Persistent backend data and cache files live in Docker volumes named `backend-da
 - Selecting an active **Tornado Warning** opens a red operations panel. Each of the county's nine listed sirens has its own activation button and three-minute countdown. Completed cards remain visibly marked and become one-click **Reactivate** controls; a single inline summary replaces repetitive completion popups. Every activation cycle is timestamped in the activity report and JSON export.
 - Once a siren is activated, a compact floating status panel remains visible while the operator works elsewhere. It lists live siren countdowns, completed sirens and repeat-cycle counts, with a shortcut back to the tornado siren controls.
 - The activity report summarizes how many unique sirens were used and how many full cycles completed, then lists each activation or reactivation chronologically with its activation and deactivation time.
-- The bottom **Spotter activation** button expands a full-width inline workspace based on the county activation sheet, with event/product details, activation and deactivation timestamps for nine departments, and a removable spotter reports log. It can start a standalone incident when no weather alert is active and collapses when the operator no longer needs it. The neighboring **Recent incidents** button opens saved activity and reports without filling the main alert desk.
+- The bottom **Spotter activation** button expands a full-width inline workspace based on the county activation sheet, with event/product details, activation and deactivation timestamps for nine departments, unit check-ins grouped by department, and a removable spotter reports log that also receives reports from field units. It can start a standalone incident when no weather alert is active and collapses when the operator no longer needs it. The neighboring **Recent incidents** button opens saved activity and reports without filling the main alert desk.
 - The **Since last broadcast** clock and its log button sit at the top of the channel time log. **Office staffing** is a third bottom workspace that expands only when needed; new incidents start with Matt Saunier (Director), Craig Staley (Deputy Director), Justin Brant (Communications), and Janis Kelser (PIO), and operators can add or remove people.
 - The editable **Nixle message** is generated separately from the radio script, includes a live character counter, and is strictly limited to 120 characters with one-click copy.
 - Clearing browser data removes local records. Different computers do not share records.

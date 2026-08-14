@@ -382,6 +382,7 @@ footer p { margin: .3rem; }
 .spotter-reports-table td:nth-child(4) input { min-width: 230px; }
 .report-time-entry { display: grid; gap: .3rem; min-width: 105px; }
 .report-time-entry span { font-size: .76rem; font-weight: 700; }
+.unit-report-source { display: block; margin-top: .25rem; color: var(--muted); font-size: .68rem; font-weight: 850; }
 .report-subheading { margin: 1rem 0 .45rem; color: var(--navy); font-size: .82rem; }
 
 .report-dialog { width: min(900px, calc(100% - 2rem)); }

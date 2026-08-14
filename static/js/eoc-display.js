@@ -1,5 +1,5 @@
 const API_BASE_URL = window.VWCERT_API_URL || "https://api.vwcert.org";
-const VERSION = "0.4.3";
+const VERSION = "0.4.4";
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
 const clientId = sessionStorage.getItem("vwcert-eoc-client-id") || `eoc-${crypto.randomUUID()}`;
 sessionStorage.setItem("vwcert-eoc-client-id", clientId);
@@ -121,9 +121,10 @@ function renderSpotter(incident) {
   const spotter = incident?.spotterActivation;
   const departments = spotter?.departments || {};
   const units = Object.values(spotter?.units || {}).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  const reports = [...(spotter?.reports || [])].sort((a, b) => new Date(b.receivedAt || 0) - new Date(a.receivedAt || 0));
   const activeDepartments = Object.entries(departments).filter(([, record]) => record.activatedAt && !record.deactivatedAt);
   elements["spotter-summary"].textContent = spotter?.initialized
-    ? `${spotter.nwsProduct || "Product pending"} - ${units.length} unit${units.length === 1 ? "" : "s"} - ${activeDepartments.length} active dept${activeDepartments.length === 1 ? "" : "s"}`
+    ? `${spotter.nwsProduct || "Product pending"} - ${units.length} unit${units.length === 1 ? "" : "s"} - ${reports.length} report${reports.length === 1 ? "" : "s"} - ${activeDepartments.length} active dept${activeDepartments.length === 1 ? "" : "s"}`
     : "No spotter activation recorded.";
   elements["spotter-unit-grid"].replaceChildren();
   if (!units.length) {
@@ -154,16 +155,24 @@ function renderSpotter(incident) {
     elements["spotter-unit-grid"].append(group);
   });
   elements["spotter-table"].replaceChildren();
-  const rows = Object.entries(departments).filter(([, record]) => record.activatedAt || record.deactivatedAt).slice(0, 5);
+  const rows = reports.slice(0, 5);
   if (!rows.length) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="3">No departments logged.</td>`;
+    const cell = document.createElement("td");
+    cell.colSpan = 3;
+    cell.textContent = "No spotter reports.";
+    row.append(cell);
     elements["spotter-table"].append(row);
     return;
   }
-  rows.forEach(([name, record]) => {
+  rows.forEach((report) => {
     const row = document.createElement("tr");
-    row.innerHTML = `<td>${name}</td><td>${formatTime(record.activatedAt)}</td><td>${formatTime(record.deactivatedAt)}</td>`;
+    const source = `${report.department || "--"}${report.unitNumber ? ` ${report.unitNumber}` : ""}`;
+    [source, report.location || "--", report.reportType || "--"].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
     elements["spotter-table"].append(row);
   });
 }

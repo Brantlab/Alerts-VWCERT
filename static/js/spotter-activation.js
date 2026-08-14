@@ -99,6 +99,18 @@ async function removeUnit(id) {
   renderState(payload.state);
 }
 
+async function saveSpotterReport(report) {
+  const response = await fetch(`${API_BASE_URL}/api/spotter/report`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(report),
+  });
+  if (!response.ok) throw new Error(response.status === 409 ? "No open shared incident" : `Report failed ${response.status}`);
+  const payload = await response.json();
+  renderState(payload.state);
+  return payload.report;
+}
+
 function renderAllUnits() {
   const department = elements.department.value;
   const units = department ? departmentUnits() : allUnits();
@@ -124,7 +136,15 @@ function renderAllUnits() {
     editButton.className = "secondary-button";
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => openEditDialog(unit));
-    card.append(content, editButton);
+    const reportButton = document.createElement("button");
+    reportButton.type = "button";
+    reportButton.className = "secondary-button";
+    reportButton.textContent = "Report";
+    reportButton.addEventListener("click", () => openReportDialog(unit));
+    const actions = document.createElement("div");
+    actions.className = "unit-actions";
+    actions.append(editButton, reportButton);
+    card.append(content, actions);
     elements["unit-list"].append(card);
   });
 }
@@ -135,6 +155,14 @@ function openEditDialog(unit) {
   elements["edit-location"].value = unit.location || "";
   elements["edit-status"].value = unit.status || "Available";
   elements["edit-unit-dialog"].showModal();
+}
+
+function openReportDialog(unit) {
+  elements["report-unit-id"].value = unit.id;
+  elements["report-heading"].textContent = `${unit.department || "Department"} ${unit.unitNumber || "Unit"} report`;
+  elements["report-location"].value = unit.location || "";
+  elements["report-type"].value = "";
+  elements["report-dialog"].showModal();
 }
 
 function renderState(state) {
@@ -212,6 +240,27 @@ elements["delete-unit"].addEventListener("click", async () => {
     setSaveStatus(`${unit?.unitNumber || "Unit"} removed.`, "ok");
   } catch (error) {
     setSaveStatus(error.message || "Remove failed.", "error");
+  }
+});
+elements["report-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const unit = allUnits().find((entry) => entry.id === elements["report-unit-id"].value);
+  if (!unit) {
+    setSaveStatus("Unit was not found.", "error");
+    return;
+  }
+  try {
+    const report = await saveSpotterReport({
+      unitId: unit.id,
+      department: unit.department,
+      unitNumber: unit.unitNumber,
+      location: elements["report-location"].value,
+      reportType: elements["report-type"].value,
+    });
+    elements["report-dialog"].close();
+    setSaveStatus(`Report sent at ${formatTime(report.receivedAt)}.`, "ok");
+  } catch (error) {
+    setSaveStatus(error.message || "Report failed.", "error");
   }
 });
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {

@@ -92,6 +92,28 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="report-dialog" class="edit-unit-dialog">
+    <form id="report-form" method="dialog">
+      <div class="dialog-heading">
+        <h2 id="report-heading">Add Spotter Report</h2>
+        <button class="icon-button" type="button" data-close-dialog="report-dialog" aria-label="Close">×</button>
+      </div>
+      <input id="report-unit-id" type="hidden">
+      <label>
+        Report location
+        <input id="report-location" type="text" placeholder="Road/intersection or observed location">
+      </label>
+      <label>
+        Report
+        <textarea id="report-type" rows="4" placeholder="Example: tree down, quarter-size hail, water over roadway" required></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button class="secondary-button" type="button" data-close-dialog="report-dialog">Cancel</button>
+        <button id="save-report" type="submit">Send Report</button>
+      </div>
+    </form>
+  </dialog>
   <script type="module" src="../js/spotter-activation.js"></script>
 </body>
 </html>

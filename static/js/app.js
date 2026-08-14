@@ -2873,6 +2873,9 @@ function renderSpotterActivation() {
       persistIncident();
     });
     departmentCell.append(department);
+    if (report.unitNumber) {
+      departmentCell.append(makeElement("small", "unit-report-source", `Unit ${report.unitNumber}`));
+    }
 
     const editableCell = (field, placeholder) => {
       const cell = document.createElement("td");
@@ -3128,7 +3131,10 @@ function populateReport(incident = selectedIncident) {
   spotterReportsBody.replaceChildren();
   if (!spotter.reports.length) appendReportRow(spotterReportsBody, ["No spotter reports were recorded."], 4);
   spotter.reports.forEach((report) => appendReportRow(spotterReportsBody, [
-    formatDateTime(report.receivedAt), report.department, report.location, report.reportType,
+    formatDateTime(report.receivedAt),
+    `${report.department || "—"}${report.unitNumber ? ` Unit ${report.unitNumber}` : ""}`,
+    report.location,
+    report.reportType,
   ]));
 
   const staffBody = elements["report-staff"];

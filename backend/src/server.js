@@ -263,6 +263,43 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/spotter/report" && request.method === "PUT") {
+    const body = await readRequestJson(request);
+    const state = await readJsonFile(stateFile, {});
+    if (!state.activeIncident || state.activeIncident.closedAt) {
+      jsonResponse(response, 409, { error: "No open shared incident" }, headers);
+      return;
+    }
+    const spotter = state.activeIncident.spotterActivation ||= { initialized: true, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] };
+    spotter.reports ||= [];
+    spotter.units ||= {};
+    const unit = spotter.units[cleanText(body.unitId, 80)] || {};
+    const report = {
+      id: randomUUID(),
+      receivedAt: new Date().toISOString(),
+      department: cleanText(body.department || unit.department, 80),
+      unitNumber: cleanText(body.unitNumber || unit.unitNumber, 80),
+      location: cleanText(body.location || unit.location, 160),
+      reportType: cleanText(body.reportType, 240),
+      updatedBy: clientIp(request),
+    };
+    if (!report.department || !report.reportType) {
+      jsonResponse(response, 400, { error: "Department and report are required" }, headers);
+      return;
+    }
+    spotter.initialized = true;
+    spotter.reports.push(report);
+    state.reason = "spotter-report-add";
+    state.updatedBy = clientIp(request);
+    state.updatedAt = report.receivedAt;
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+    jsonResponse(response, 200, { report, state }, headers);
+    broadcast("state", state);
+    broadcastPresence();
+    return;
+  }
+
   if (url.pathname === "/api/events" && request.method === "GET") {
     const requestedId = cleanClientName(url.searchParams.get("clientId"));
     const id = requestedId || randomUUID();

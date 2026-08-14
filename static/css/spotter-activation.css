@@ -21,7 +21,8 @@ h1 { margin: 0; color: var(--navy); font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .incident-status { margin: .65rem 0 1.2rem; color: var(--muted); font-weight: 750; }
 form { display: grid; grid-template-columns: 1fr 1.2fr .8fr auto; align-items: end; gap: .85rem; }
 label { display: grid; gap: .3rem; color: var(--navy); font-size: .85rem; font-weight: 850; }
-input, select { min-height: 44px; padding: .55rem .7rem; color: var(--ink); background: white; border: 1px solid #b7c7ce; border-radius: 8px; font: inherit; font-weight: 750; }
+input, select, textarea { min-height: 44px; padding: .55rem .7rem; color: var(--ink); background: white; border: 1px solid #b7c7ce; border-radius: 8px; font: inherit; font-weight: 750; }
+textarea { min-height: 96px; resize: vertical; }
 .department-picker { margin: 1rem 0 .85rem; }
 button { min-height: 44px; color: white; background: var(--teal); border: 0; border-radius: 9px; font: inherit; font-weight: 900; line-height: 1.1; cursor: pointer; }
 button:disabled { opacity: .65; cursor: wait; }
@@ -42,6 +43,7 @@ button:disabled { opacity: .65; cursor: wait; }
 .unit-card strong { display: block; color: var(--navy); }
 .unit-card span { display: block; margin-top: .2rem; color: var(--muted); font-size: .9rem; font-weight: 750; }
 .unit-card .secondary-button { min-width: 70px; min-height: 36px; }
+.unit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
 .edit-unit-dialog { width: min(520px, calc(100% - 2rem)); padding: 0; border: 0; border-radius: 12px; box-shadow: 0 20px 70px rgba(20,48,65,.28); }
 .edit-unit-dialog::backdrop { background: rgba(10,38,57,.38); }
 .edit-unit-dialog form { display: grid; grid-template-columns: 1fr; gap: .85rem; padding: 1.25rem; }
@@ -53,6 +55,7 @@ button:disabled { opacity: .65; cursor: wait; }
 @media (max-width: 760px) {
   form { grid-template-columns: 1fr; }
   .unit-card { grid-template-columns: 1fr; }
+  .unit-actions { display: grid; grid-template-columns: 1fr; }
   .unit-card .secondary-button { width: 100%; }
   .dialog-actions { display: grid; grid-template-columns: 1fr; }
 }
