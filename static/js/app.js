@@ -193,6 +193,10 @@ let operationsTimer = null;
 let alertSoundEnabled = localStorage.getItem(ALERT_SOUND_KEY) === "true";
 let alertAudioContext = null;
 let knownAlertSeries = null;
+let sharedStateApplying = false;
+let sharedStateLastUpdatedAt = "";
+let sharedStatePublishTimer = null;
+let backendEvents = null;
 
 const trainingPolygons = {
   southeast: { area: "southeastern", points: [[-84.62, 40.84], [-84.34, 40.83], [-84.35, 40.67], [-84.57, 40.69]] },
@@ -717,6 +721,7 @@ function startIncidentSession({ isTraining = false, alerts = activeAlerts } = {}
   persistIncident();
   setIncidentControls(true);
   renderAlerts();
+  publishSharedState("start-incident");
   return selectedIncident;
 }
 
@@ -741,6 +746,7 @@ function completeIncidentSession() {
   setSpotterExpanded(false);
   setIncidentControls(false);
   renderAlerts();
+  publishSharedState("complete-incident");
 }
 
 function setFeedState(state, detail = "") {
@@ -1003,6 +1009,122 @@ function setBackendStatus(status) {
   element.textContent = `Backend: ${status === "connected" ? "connected" : status === "disconnected" ? "disconnected" : "checking"}`;
 }
 
+function setConnectedClients(clients = []) {
+  const element = elements["connected-clients"];
+  if (!element) return;
+  const ips = [...new Set(clients.map((client) => client.ip).filter(Boolean))];
+  element.textContent = ips.length
+    ? `Connected: ${ips.length} (${ips.join(", ")})`
+    : "Connected: —";
+}
+
+function backendHeaders() {
+  const headers = { "content-type": "application/json" };
+  if (window.VWCERT_API_TOKEN) headers.authorization = `Bearer ${window.VWCERT_API_TOKEN}`;
+  return headers;
+}
+
+function sharedStateSnapshot(reason = "update") {
+  const alertRecord = currentAlertRecord();
+  return {
+    reason,
+    activeCounty: { ...selectedCounty },
+    selectedAlertKey,
+    selectedAlertId: selectedAlert?.id || selectedAlert?.["@id"] || "",
+    selectedEvent: selectedAlert?.event || "",
+    trainingMode,
+    exerciseMode,
+    incident: selectedIncident ? {
+      seriesId: selectedIncident.seriesId,
+      openedAt: selectedIncident.openedAt,
+      closedAt: selectedIncident.closedAt || null,
+      isTraining: Boolean(selectedIncident.isTraining),
+      operator: selectedIncident.operator || "",
+      notes: selectedIncident.notes || "",
+    } : null,
+    messageDrafts: alertRecord && selectedAlertKey ? {
+      alertKey: selectedAlertKey,
+      radio: alertRecord.message || "",
+      nixle: alertRecord.nixleMessage || "",
+      facebook: alertRecord.facebookMessage || "",
+    } : null,
+  };
+}
+
+function publishSharedState(reason = "update") {
+  if (sharedStateApplying) return;
+  clearTimeout(sharedStatePublishTimer);
+  sharedStatePublishTimer = setTimeout(async () => {
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/state/current`, {
+        method: "PUT",
+        headers: backendHeaders(),
+        body: JSON.stringify(sharedStateSnapshot(reason)),
+      });
+      if (response.ok) {
+        const state = await response.json();
+        sharedStateLastUpdatedAt = state.updatedAt || sharedStateLastUpdatedAt;
+        setBackendStatus("connected");
+      } else {
+        setBackendStatus("disconnected");
+      }
+    } catch {
+      setBackendStatus("disconnected");
+    }
+  }, 450);
+}
+
+function operatorIsTyping() {
+  return ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement?.tagName);
+}
+
+function matchingAlertForSharedState(state) {
+  if (!state?.selectedAlertKey) return null;
+  return activeAlerts.find((alert) => alertRecordKey(alert, Boolean(alert.isTraining)) === state.selectedAlertKey)
+    || activeAlerts.find((alert) => getSeriesId(alert) === state.selectedAlertKey)
+    || activeAlerts.find((alert) => (alert.id || alert["@id"]) === state.selectedAlertId);
+}
+
+function applySharedMessageDrafts(state) {
+  const drafts = state?.messageDrafts;
+  const alertRecord = currentAlertRecord();
+  if (!drafts || !alertRecord || drafts.alertKey !== selectedAlertKey || operatorIsTyping()) return;
+  alertRecord.message = drafts.radio;
+  alertRecord.nixleMessage = drafts.nixle;
+  alertRecord.facebookMessage = drafts.facebook;
+  elements["radio-message"].value = alertRecord.message;
+  elements["print-message"].textContent = alertRecord.message;
+  elements["nixle-message"].value = alertRecord.nixleMessage;
+  updateNixleCount();
+  elements["facebook-message"].value = alertRecord.facebookMessage;
+  persistIncident();
+}
+
+async function applySharedState(state) {
+  if (!state?.updatedAt || state.updatedAt === sharedStateLastUpdatedAt || sharedStateApplying) return;
+  sharedStateLastUpdatedAt = state.updatedAt;
+  if (operatorIsTyping()) return;
+  sharedStateApplying = true;
+  try {
+    const sharedCounty = state.activeCounty;
+    if (sharedCounty?.code && sharedCounty.code !== selectedCounty.code) {
+      selectedCounty = { code: sharedCounty.code, name: sharedCounty.name || sharedCounty.code };
+      countyNameByCode.set(selectedCounty.code, selectedCounty.name);
+      await loadAlertCountyOptions();
+      elements["county-select"].value = selectedCounty.code;
+      updateCountyLabels();
+      updateCountySelectAlertClass();
+      resetWorkspaceForCountyChange();
+      await fetchAlerts();
+    }
+    const alert = matchingAlertForSharedState(state);
+    if (alert && selectedAlertKey !== state.selectedAlertKey) selectAlert(alert, Boolean(alert.isTraining));
+    applySharedMessageDrafts(state);
+  } finally {
+    sharedStateApplying = false;
+  }
+}
+
 async function checkBackendStatus() {
   setBackendStatus("checking");
   const controller = new AbortController();
@@ -1018,6 +1140,31 @@ async function checkBackendStatus() {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function connectBackendEvents() {
+  if (!window.EventSource || backendEvents) return;
+  backendEvents = new EventSource(`${BACKEND_API_URL}/api/events`);
+  backendEvents.addEventListener("open", () => setBackendStatus("connected"));
+  backendEvents.addEventListener("presence", (event) => {
+    try {
+      setConnectedClients(JSON.parse(event.data).clients || []);
+      setBackendStatus("connected");
+    } catch {
+      setConnectedClients([]);
+    }
+  });
+  backendEvents.addEventListener("state", (event) => {
+    try {
+      applySharedState(JSON.parse(event.data));
+    } catch {
+      // Ignore malformed shared state payloads.
+    }
+  });
+  backendEvents.addEventListener("error", () => {
+    setBackendStatus("disconnected");
+    setConnectedClients([]);
+  });
 }
 
 function impactedPlaceNames(alert) {
@@ -2159,6 +2306,7 @@ function selectAlert(alert, isTraining) {
   renderStaff();
   renderAlerts();
   elements.workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  publishSharedState("select-alert");
 }
 
 function selectedIsActiveTornadoWarning() {
@@ -3412,6 +3560,7 @@ async function changeCounty(event) {
   }
   resetWorkspaceForCountyChange();
   await fetchAlerts();
+  publishSharedState("change-county");
 }
 
 elements["county-select"].addEventListener("change", changeCounty);
@@ -3494,6 +3643,7 @@ elements["reset-message"].addEventListener("click", () => {
   elements["radio-message"].value = alertRecord.message;
   elements["print-message"].textContent = alertRecord.message;
   persistIncident();
+  publishSharedState("restore-radio");
 });
 elements["radio-message"].addEventListener("input", (event) => {
   const alertRecord = currentAlertRecord();
@@ -3501,6 +3651,7 @@ elements["radio-message"].addEventListener("input", (event) => {
   alertRecord.message = event.target.value;
   elements["print-message"].textContent = alertRecord.message;
   persistIncident();
+  publishSharedState("edit-radio");
 });
 elements["reset-nixle"].addEventListener("click", () => {
   const alertRecord = currentAlertRecord();
@@ -3508,6 +3659,7 @@ elements["reset-nixle"].addEventListener("click", () => {
   elements["nixle-message"].value = alertRecord.nixleMessage;
   updateNixleCount();
   persistIncident();
+  publishSharedState("restore-nixle");
 });
 elements["nixle-message"].addEventListener("input", (event) => {
   const alertRecord = currentAlertRecord();
@@ -3516,26 +3668,31 @@ elements["nixle-message"].addEventListener("input", (event) => {
   if (event.target.value !== alertRecord.nixleMessage) event.target.value = alertRecord.nixleMessage;
   updateNixleCount();
   persistIncident();
+  publishSharedState("edit-nixle");
 });
 elements["reset-facebook"].addEventListener("click", () => {
   const alertRecord = currentAlertRecord();
   alertRecord.facebookMessage = alertRecord.generatedFacebook;
   elements["facebook-message"].value = alertRecord.facebookMessage;
   persistIncident();
+  publishSharedState("restore-facebook");
 });
 elements["facebook-message"].addEventListener("input", (event) => {
   const alertRecord = currentAlertRecord();
   if (!alertRecord) return;
   alertRecord.facebookMessage = event.target.value;
   persistIncident();
+  publishSharedState("edit-facebook");
 });
 elements["operator-name"].addEventListener("input", (event) => {
   selectedIncident.operator = event.target.value;
   persistIncident();
+  publishSharedState("edit-operator");
 });
 elements["incident-notes"].addEventListener("input", (event) => {
   selectedIncident.notes = event.target.value;
   persistIncident();
+  publishSharedState("edit-notes");
 });
 elements["spotter-activation-button"].addEventListener("click", openSpotterActivation);
 elements["collapse-spotter"].addEventListener("click", () => {
@@ -3647,6 +3804,6 @@ updateCountyLabels();
 loadAlertCountyOptions().finally(() => {
   elements["county-select"].value = selectedCounty.code;
   updateCountyLabels();
-  fetchAlerts();
+  fetchAlerts().finally(connectBackendEvents);
   setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);
 });

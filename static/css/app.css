@@ -263,6 +263,7 @@ footer p { margin: .3rem; }
 .backend-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); }
 .backend-status.connected::before { background: var(--green); }
 .backend-status.disconnected::before { background: var(--red); }
+.connected-clients { font-weight: 750; }
 .safety-note { font-weight: 650; }
 .noscript { position: fixed; inset: auto 0 0; padding: 1rem; color: white; background: var(--red); text-align: center; }
 .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; }

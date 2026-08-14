@@ -73,8 +73,11 @@ Important `.env` values:
 ```env
 BACKEND_PORT=8080
 PUBLIC_FRONTEND_ORIGIN=https://alerts.vwcert.org
-ADMIN_TOKEN=change-this-before-enabling-writes
+ADMIN_TOKEN=
+PRESENCE_TIMEOUT_MS=45000
 ```
+
+Leave `ADMIN_TOKEN` blank for browser shared-state writes. If the API is public, protect `api.vwcert.org` with Cloudflare Access before using shared operational state.
 
 Current backend endpoints:
 
@@ -82,6 +85,8 @@ Current backend endpoints:
 - `GET /api/config` shows runtime config that is safe to expose.
 - `GET /api/state/current` returns the shared dashboard state placeholder.
 - `PUT /api/state/current` saves shared dashboard state JSON. If `ADMIN_TOKEN` is set, send `Authorization: Bearer <token>`.
+- `GET /api/presence` returns connected live clients.
+- `GET /api/events` streams shared state and connected-client updates with Server-Sent Events.
 
 Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.
 
