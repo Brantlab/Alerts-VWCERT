@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a2639"><title>Calendar Approval Panel · Van Wert County EMA</title><link rel="stylesheet" href="calendar.css"><link rel="stylesheet" href="panel.css"></head>
+<body>
+  <header class="calendar-header"><div class="calendar-brand"><span aria-hidden="true">VW</span><div><p>Van Wert County Emergency Management</p><h1>Calendar Approval Panel</h1></div></div><nav><a href="index.html">Public calendar</a><a href="eoc.html">EOC display</a><button id="logout" class="button secondary" type="button">Lock panel</button></nav></header>
+  <main class="panel-shell">
+    <section id="login-card" class="login-card">
+      <p class="eyebrow">Restricted</p><h2>Staff approval access</h2><p>Enter the calendar approval token configured on the VW-CERT backend.</p>
+      <form id="login-form"><label><span>Approval token</span><input id="admin-token" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Unlock panel</button></form>
+      <div id="login-status" class="form-status" role="status"></div>
+    </section>
+    <section id="panel-content" class="hidden">
+      <div class="panel-overview"><div><p class="eyebrow">Approval workflow</p><h2>Calendar events</h2><p id="panel-updated">Loading…</p></div><button id="refresh-panel" class="button secondary" type="button">Refresh</button></div>
+      <div class="metric-grid"><article><strong id="pending-count">0</strong><span>Pending approval</span></article><article><strong id="upcoming-count">0</strong><span>Upcoming approved</span></article><article><strong id="past-count">0</strong><span>Past approved</span></article></div>
+      <section class="panel-section"><div class="panel-section-heading"><div><p class="eyebrow">Action required</p><h2>Pending submissions</h2></div></div><div id="pending-list" class="expandable-list"></div></section>
+      <section class="panel-section"><div class="panel-section-heading"><div><p class="eyebrow">Published</p><h2>Approved events</h2></div></div><div id="approved-list" class="expandable-list"></div></section>
+    </section>
+  </main>
+  <script>window.VWCERT_API_URL = window.VWCERT_API_URL || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : "https://api.vwcert.org");</script><script type="module" src="panel.js"></script>
+</body></html>

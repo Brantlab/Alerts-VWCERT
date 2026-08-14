@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a2639">
+  <meta name="description" content="Van Wert County CERT public events calendar">
+  <title>Van Wert County CERT Calendar</title>
+  <link rel="stylesheet" href="calendar.css">
+</head>
+<body>
+  <a class="skip-link" href="#calendar-main">Skip to calendar</a>
+  <header class="calendar-header">
+    <div class="calendar-brand"><span aria-hidden="true">VW</span><div><p>Van Wert County Emergency Management</p><h1>CERT Community Calendar</h1></div></div>
+    <nav aria-label="Calendar links">
+      <a href="eoc.html">EOC display</a>
+      <a href="panel.html">Approval panel</a>
+      <button id="open-intake" class="button primary" type="button">Submit an event</button>
+    </nav>
+  </header>
+
+  <main id="calendar-main" class="calendar-shell">
+    <section class="calendar-intro">
+      <div><p class="eyebrow">Approved public events</p><h2>Van Wert County event calendar</h2><p>Events submitted by the public are reviewed by Van Wert County EMA before publication.</p></div>
+      <div class="subscription-actions">
+        <a id="subscribe-calendar" class="button secondary" href="webcal://api.vwcert.org/api/calendar/events.ics">Subscribe in calendar app</a>
+        <a id="download-calendar" class="button secondary" href="https://api.vwcert.org/api/calendar/events.ics">Download ICS</a>
+      </div>
+    </section>
+
+    <section class="calendar-card" aria-labelledby="calendar-heading">
+      <div class="calendar-toolbar">
+        <div class="calendar-navigation">
+          <button id="previous-period" class="icon-control" type="button" aria-label="Previous period">‹</button>
+          <button id="calendar-today" class="button compact secondary" type="button">Today</button>
+          <button id="next-period" class="icon-control" type="button" aria-label="Next period">›</button>
+        </div>
+        <h2 id="calendar-heading">Calendar</h2>
+        <div class="view-switcher" role="group" aria-label="Calendar view">
+          <button type="button" data-view="year">12 month</button>
+          <button type="button" data-view="month" class="active">1 month</button>
+          <button type="button" data-view="week">1 week</button>
+          <button type="button" data-view="day">Today</button>
+          <button type="button" data-view="list">List</button>
+        </div>
+      </div>
+      <div id="calendar-status" class="calendar-status" role="status">Loading approved events…</div>
+      <div id="calendar-view" class="calendar-view" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer class="calendar-footer">Van Wert County Emergency Management · Approved events only</footer>
+
+  <dialog id="intake-dialog" class="calendar-dialog intake-dialog">
+    <form id="intake-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Public intake</p><h2>Submit an event for approval</h2></div><button class="dialog-close" type="button" data-close="intake-dialog" aria-label="Close">×</button></div>
+      <p class="dialog-note">Submitting this form does not immediately publish the event. EMA staff will review it first.</p>
+      <div class="form-grid">
+        <label class="span-2"><span>Name of event *</span><input name="name" maxlength="160" required></label>
+        <label class="span-2"><span>Address of event *</span><input name="address" maxlength="240" autocomplete="street-address" required></label>
+        <label><span>Start *</span><input id="event-start" name="start" type="datetime-local" required></label>
+        <label><span>End *</span><input id="event-end" name="end" type="datetime-local" required></label>
+        <label class="check-label span-2"><input id="event-all-day" name="allDay" type="checkbox"><span>All-day event</span></label>
+        <label><span>POC name *</span><input name="pocName" maxlength="120" autocomplete="name" required></label>
+        <label><span>POC phone *</span><input name="pocPhone" maxlength="40" type="tel" autocomplete="tel" required></label>
+        <label class="span-2"><span>Notes</span><textarea name="notes" rows="5" maxlength="2000" placeholder="Access instructions, setup details, requested support, or other useful information"></textarea></label>
+        <label class="honeypot" aria-hidden="true"><span>Website</span><input name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <div id="intake-status" class="form-status" role="status"></div>
+      <div class="dialog-actions"><button class="button secondary" type="button" data-close="intake-dialog">Cancel</button><button class="button primary" type="submit">Submit for approval</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="event-dialog" class="calendar-dialog event-dialog">
+    <div class="dialog-heading"><div><p class="eyebrow">Approved event</p><h2 id="detail-name">Event</h2></div><button class="dialog-close" type="button" data-close="event-dialog" aria-label="Close">×</button></div>
+    <dl class="event-details">
+      <div><dt>Date and time</dt><dd id="detail-time"></dd></div>
+      <div><dt>Address</dt><dd id="detail-address"></dd></div>
+      <div><dt>Point of contact</dt><dd id="detail-poc"></dd></div>
+      <div><dt>Notes</dt><dd id="detail-notes"></dd></div>
+    </dl>
+    <div class="dialog-actions"><button class="button primary" type="button" data-close="event-dialog">Close</button></div>
+  </dialog>
+
+  <script>window.VWCERT_API_URL = window.VWCERT_API_URL || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : "https://api.vwcert.org");</script>
+  <script type="module" src="calendar.js"></script>
+</body>
+</html>

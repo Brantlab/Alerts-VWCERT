@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#081d2b"><title>EOC Event Display · Van Wert County EMA</title><link rel="stylesheet" href="eoc.css"></head>
+<body>
+  <header class="eoc-header"><div class="eoc-brand"><span>VW</span><div><p>Van Wert County Emergency Management</p><h1>48-Hour Event Board</h1></div></div><div class="eoc-clock"><strong id="clock-time">--:--</strong><span id="clock-date">Loading…</span></div></header>
+  <main>
+    <div class="window-heading"><div><span class="past-key"></span> Previous 24 hours</div><p id="window-range">Loading event window…</p><div><span class="future-key"></span> Next 24 hours</div></div>
+    <div id="connection-status" class="connection-status">Connecting to calendar…</div>
+    <div class="event-sheet-wrap">
+      <table class="event-sheet">
+        <thead><tr><th>Status</th><th>Date and time</th><th>Name of event</th><th>Address</th><th>POC name</th><th>POC phone</th><th>Notes</th></tr></thead>
+        <tbody id="event-sheet-body"><tr><td colspan="7" class="empty-row">Loading approved events…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+  <footer><span>Approved calendar events · Rolling 48-hour window</span><span id="last-updated">Not yet updated</span></footer>
+  <script>window.VWCERT_API_URL = window.VWCERT_API_URL || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? location.origin : "https://api.vwcert.org");</script><script type="module" src="eoc.js"></script>
+</body></html>
