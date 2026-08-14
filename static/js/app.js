@@ -172,7 +172,6 @@ let selectedAlert = null;
 let selectedAlertKey = null;
 let selectedIncident = null;
 let trainingMode = false;
-let installPrompt = null;
 let selectedCounty = { ...DEFAULT_COUNTY };
 let countyGeometryCache = new Map();
 let countyNameByCode = new Map([[DEFAULT_COUNTY.code, DEFAULT_COUNTY.name]]);
@@ -3988,19 +3987,6 @@ document.addEventListener("keydown", (event) => {
   }
 });
 elements["export-records"].addEventListener("click", exportRecords);
-
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  installPrompt = event;
-  elements["install-app"].classList.remove("hidden");
-});
-elements["install-app"].addEventListener("click", async () => {
-  if (!installPrompt) return;
-  installPrompt.prompt();
-  await installPrompt.userChoice;
-  installPrompt = null;
-  elements["install-app"].classList.add("hidden");
-});
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
 
