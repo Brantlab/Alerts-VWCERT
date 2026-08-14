@@ -44,9 +44,14 @@
             <option value="OHC161">Van Wert County</option>
           </select>
         </label>
-        <span id="active-count" class="count-badge">— active</span>
-        <button id="toggle-alert-sound" class="button compact sound-toggle" type="button" aria-pressed="false">Alert sound: Off</button>
-        <button id="refresh-alerts" class="button compact" type="button">Refresh now</button>
+        <div class="status-controls">
+          <label class="status-toggle" for="show-spc-md">
+            <input id="show-spc-md" type="checkbox" aria-controls="county-select" checked>
+            <span>SPC MD</span>
+          </label>
+          <button id="toggle-alert-sound" class="button compact sound-toggle" type="button" aria-pressed="false">Alert sound: Off</button>
+          <button id="refresh-alerts" class="button compact" type="button">Refresh</button>
+        </div>
       </div>
     </section>
     <div id="sound-status" class="sr-status" aria-live="polite"></div>
@@ -69,7 +74,7 @@
       </div>
     </section>
 
-    <section class="panel spc-panel" aria-labelledby="spc-heading">
+    <section id="spc-panel" class="panel spc-panel" aria-labelledby="spc-heading">
       <div class="section-heading">
         <div>
           <p class="section-kicker">Storm Prediction Center</p>
@@ -120,6 +125,7 @@
           <p class="field-help">Maximum 120 characters. Review before sending.</p>
           <div class="message-actions">
             <button id="copy-nixle" class="button primary" type="button">Copy Nixle text</button>
+            <a id="open-nixle" class="button secondary" href="https://local.nixle.com/login/" target="_blank" rel="noopener">Open Nixle</a>
             <button id="reset-nixle" class="button secondary" type="button">Restore generated text</button>
           </div>
         </section>
@@ -386,6 +392,21 @@
             <option value="">All offices</option>
           </select>
         </label>
+        <details class="national-alert-type-menu">
+          <summary id="national-alert-type-summary">Alert types: All</summary>
+          <div id="national-alert-type-filter" class="national-alert-type-options" role="group" aria-labelledby="national-alert-type-summary"></div>
+        </details>
+        <details class="national-map-layer-menu">
+          <summary>Layers</summary>
+          <div class="national-map-layer-options">
+            <label><input id="national-map-radar" type="checkbox"> Radar</label>
+            <label><input id="national-map-county-lines" type="checkbox" checked> County lines</label>
+            <label><input id="national-map-state-lines" type="checkbox" checked> State lines</label>
+            <label><input id="national-map-county-names" type="checkbox" checked> County names</label>
+            <label><input id="national-map-city-names" type="checkbox" checked> City names</label>
+            <label><input id="national-map-office-dots" type="checkbox" checked> NWS offices</label>
+          </div>
+        </details>
         <button id="national-map-zoom-out" class="button tiny secondary" type="button" aria-label="Zoom out">-</button>
         <button id="national-map-zoom-in" class="button tiny secondary" type="button" aria-label="Zoom in">+</button>
         <button id="national-map-reset" class="button tiny secondary" type="button">Reset</button>

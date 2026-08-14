@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: vwcert-alerts-backend
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATA_DIR: /data
+      CACHE_DIR: /cache
+      PUBLIC_FRONTEND_ORIGIN: ${PUBLIC_FRONTEND_ORIGIN:-http://localhost:1313}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - backend-data:/data
+      - backend-cache:/cache
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vwcert-alerts-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - tunnel
+
+volumes:
+  backend-data:
+  backend-cache:

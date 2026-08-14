@@ -24,6 +24,67 @@ Deploy the generated `public/` directory to any HTTPS static host. HTTPS is requ
 
 Pushes to `main` automatically build and deploy the site with the GitHub Pages workflow in `.github/workflows/pages.yaml`. The workflow supplies the repository-specific base URL during the Hugo build.
 
+## VPS backend
+
+The repo includes a small Dockerized backend scaffold for the shared API work. The frontend can remain on GitHub Pages while the backend runs on a VPS behind Cloudflare Tunnel.
+
+First-time setup on the VPS:
+
+```sh
+git pull
+cp .env.example .env
+docker compose up -d --build backend
+```
+
+For a small VPS checkout, use the helper script instead. First run:
+
+```sh
+REPO_URL=https://github.com/YOUR-ORG/YOUR-REPO.git bash scripts/vps-backend-update.sh
+```
+
+Future runs from the same VPS:
+
+```sh
+bash scripts/vps-backend-update.sh
+```
+
+The script keeps a sparse checkout with only backend/deploy files, rebuilds the backend, checks `/health`, and prunes Docker image/build cache. It does not prune Docker volumes.
+
+Check it locally on the VPS:
+
+```sh
+curl http://127.0.0.1:8080/health
+```
+
+If `cloudflared` already runs on the VPS host, point the Cloudflare Tunnel public hostname at:
+
+```txt
+http://127.0.0.1:8080
+```
+
+If you want Compose to run the tunnel container, put `CLOUDFLARE_TUNNEL_TOKEN` in `.env` and start the tunnel profile:
+
+```sh
+docker compose --profile tunnel up -d --build
+```
+
+Important `.env` values:
+
+```env
+BACKEND_PORT=8080
+PUBLIC_FRONTEND_ORIGIN=https://alerts.vwcert.org
+ADMIN_TOKEN=change-this-before-enabling-writes
+```
+
+Current backend endpoints:
+
+- `GET /health` verifies the container is alive.
+- `GET /api/config` shows runtime config that is safe to expose.
+- `GET /api/state/current` returns the shared dashboard state placeholder.
+- `PUT /api/state/current` saves shared dashboard state JSON. If `ADMIN_TOKEN` is set, send `Authorization: Bearer <token>`.
+
+Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.
+
 ## Data and operating notes
 
 - The browser defaults to Van Wert County (`OHC161`) and polls the selected county's active NWS alert feed every 30 seconds. The county selector is built from counties nationally that currently have supported watches or warnings, with Van Wert kept available as the home county. Counties with warnings are marked red; counties with watches are marked yellow.

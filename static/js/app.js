@@ -20,15 +20,20 @@ import {
 const DEFAULT_COUNTY = { code: "OHC161", name: "Van Wert County" };
 const NATIONAL_ALERTS_URL = "https://api.weather.gov/alerts/active";
 const NATIONAL_CITIES_URL = "https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv";
+const POPULATION_CITIES_URL = "https://raw.githubusercontent.com/plotly/datasets/master/us-cities-top-1k.csv";
 const NATIONAL_COUNTIES_URL = "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json";
+const NATIONAL_STATES_URL = "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json";
 const NATIONAL_COUNTY_ZONES_URL = "https://api.weather.gov/zones?type=county&include_geometry=false&limit=5000";
 const SPC_MD_RSS_URL = "https://www.spc.noaa.gov/products/spcmdrss.xml";
+const NATIONAL_RADAR_URL = "https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export?bbox=-125,24,-66.5,50.8&bboxSR=4326&imageSR=4326&size=1200,700&format=png32&transparent=true&f=image";
+const NATIONAL_RADAR_FRAME = { x: 35, y: 30, width: 930, height: 500 };
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const MAX_HIGHWAY_SEGMENTS = 1000;
 const HIGHWAY_MERGE_DISTANCE_METERS = 400;
 const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const ALERT_SOUND_KEY = "vwcert-alert-sound-v1";
+const SHOW_SPC_MD_KEY = "vwcert-show-spc-md-v1";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
 const SIREN_DURATION = 3 * 60_000;
@@ -79,6 +84,72 @@ const MAJOR_US_CITIES = [
   { name: "Honolulu", longitude: -157.8583, latitude: 21.3069 },
   { name: "San Juan", longitude: -66.1057, latitude: 18.4655 },
 ];
+const REGIONAL_US_CITIES = [
+  { name: "Spokane", longitude: -117.4260, latitude: 47.6588 },
+  { name: "Boise", longitude: -116.2023, latitude: 43.6150 },
+  { name: "Reno", longitude: -119.8138, latitude: 39.5296 },
+  { name: "Sacramento", longitude: -121.4944, latitude: 38.5816 },
+  { name: "Fresno", longitude: -119.7871, latitude: 36.7378 },
+  { name: "Tucson", longitude: -110.9747, latitude: 32.2226 },
+  { name: "El Paso", longitude: -106.4850, latitude: 31.7619 },
+  { name: "Lubbock", longitude: -101.8552, latitude: 33.5779 },
+  { name: "Amarillo", longitude: -101.8313, latitude: 35.2220 },
+  { name: "Tulsa", longitude: -95.9928, latitude: 36.1540 },
+  { name: "Wichita", longitude: -97.3301, latitude: 37.6872 },
+  { name: "Omaha", longitude: -95.9345, latitude: 41.2565 },
+  { name: "Des Moines", longitude: -93.6091, latitude: 41.5868 },
+  { name: "Sioux Falls", longitude: -96.7311, latitude: 43.5446 },
+  { name: "Fargo", longitude: -96.7898, latitude: 46.8772 },
+  { name: "Bismarck", longitude: -100.7837, latitude: 46.8083 },
+  { name: "Billings", longitude: -108.5007, latitude: 45.7833 },
+  { name: "Cheyenne", longitude: -104.8202, latitude: 41.1400 },
+  { name: "Colorado Springs", longitude: -104.8214, latitude: 38.8339 },
+  { name: "Little Rock", longitude: -92.2896, latitude: 34.7465 },
+  { name: "Jackson", longitude: -90.1848, latitude: 32.2988 },
+  { name: "Birmingham", longitude: -86.8025, latitude: 33.5186 },
+  { name: "Mobile", longitude: -88.0399, latitude: 30.6954 },
+  { name: "Pensacola", longitude: -87.2169, latitude: 30.4213 },
+  { name: "Tallahassee", longitude: -84.2807, latitude: 30.4383 },
+  { name: "Jacksonville", longitude: -81.6557, latitude: 30.3322 },
+  { name: "Orlando", longitude: -81.3792, latitude: 28.5383 },
+  { name: "Tampa", longitude: -82.4572, latitude: 27.9506 },
+  { name: "Savannah", longitude: -81.0912, latitude: 32.0809 },
+  { name: "Charleston", longitude: -79.9311, latitude: 32.7765 },
+  { name: "Raleigh", longitude: -78.6382, latitude: 35.7796 },
+  { name: "Richmond", longitude: -77.4360, latitude: 37.5407 },
+  { name: "Norfolk", longitude: -76.2859, latitude: 36.8508 },
+  { name: "Pittsburgh", longitude: -79.9959, latitude: 40.4406 },
+  { name: "Buffalo", longitude: -78.8784, latitude: 42.8864 },
+  { name: "Rochester", longitude: -77.6109, latitude: 43.1566 },
+  { name: "Albany", longitude: -73.7562, latitude: 42.6526 },
+  { name: "Hartford", longitude: -72.6851, latitude: 41.7658 },
+  { name: "Providence", longitude: -71.4128, latitude: 41.8240 },
+  { name: "Portland ME", longitude: -70.2553, latitude: 43.6591 },
+  { name: "Burlington", longitude: -73.2121, latitude: 44.4759 },
+  { name: "Indianapolis", longitude: -86.1581, latitude: 39.7684 },
+  { name: "Columbus", longitude: -82.9988, latitude: 39.9612 },
+  { name: "Cincinnati", longitude: -84.5120, latitude: 39.1031 },
+  { name: "Louisville", longitude: -85.7585, latitude: 38.2527 },
+  { name: "Lexington", longitude: -84.5037, latitude: 38.0406 },
+  { name: "Toledo", longitude: -83.5552, latitude: 41.6528 },
+  { name: "Grand Rapids", longitude: -85.6681, latitude: 42.9634 },
+  { name: "Milwaukee", longitude: -87.9065, latitude: 43.0389 },
+  { name: "Madison", longitude: -89.4012, latitude: 43.0731 },
+  { name: "Green Bay", longitude: -88.0198, latitude: 44.5133 },
+  { name: "Duluth", longitude: -92.1005, latitude: 46.7867 },
+  { name: "Peoria", longitude: -89.5890, latitude: 40.6936 },
+  { name: "Springfield IL", longitude: -89.6501, latitude: 39.7817 },
+  { name: "Columbia", longitude: -92.3341, latitude: 38.9517 },
+  { name: "Springfield MO", longitude: -93.2923, latitude: 37.2089 },
+  { name: "Knoxville", longitude: -83.9207, latitude: 35.9606 },
+  { name: "Chattanooga", longitude: -85.3097, latitude: 35.0456 },
+  { name: "Shreveport", longitude: -93.7502, latitude: 32.5252 },
+  { name: "Baton Rouge", longitude: -91.1403, latitude: 30.4515 },
+  { name: "Corpus Christi", longitude: -97.3964, latitude: 27.8006 },
+  { name: "Austin", longitude: -97.7431, latitude: 30.2672 },
+  { name: "Fort Worth", longitude: -97.3308, latitude: 32.7555 },
+  { name: "Waco", longitude: -97.1467, latitude: 31.5493 },
+];
 const STATE_FIPS = {
   AL: "01", AK: "02", AZ: "04", AR: "05", CA: "06", CO: "08", CT: "09", DE: "10", DC: "11", FL: "12", GA: "13",
   HI: "15", ID: "16", IL: "17", IN: "18", IA: "19", KS: "20", KY: "21", LA: "22", ME: "23", MD: "24", MA: "25",
@@ -107,9 +178,11 @@ let countyOptionLabelByCode = new Map([[DEFAULT_COUNTY.code, `${DEFAULT_COUNTY.n
 let countyAlertLevelByCode = new Map();
 let countySpcDiscussionByCode = new Map();
 let nationalCitiesPromise = null;
+let populationCitiesPromise = null;
 let nationalCountiesPromise = null;
+let nationalStatesPromise = null;
 let nationalCountyZonesPromise = null;
-let nationalMapData = { counties: [], alerts: [], zones: [] };
+let nationalMapData = { counties: [], states: [], alerts: [], zones: [], cities: [] };
 let countyOfficeCache = new Map();
 let highwayCache = new Map();
 let nationalMapState = { scale: 1, x: 0, y: 0, dragging: false, pointerId: null, lastX: 0, lastY: 0 };
@@ -140,6 +213,10 @@ function countyBoundaryUrl(code = selectedCounty.code) {
 
 function countyDisplay() {
   return `${selectedCounty.name} · ${selectedCounty.code}`;
+}
+
+function showSpcMdCounties() {
+  return elements["show-spc-md"]?.checked ?? true;
 }
 
 function currentCountyName() {
@@ -268,7 +345,8 @@ function decodeSpcCoordinate(token) {
   if (digits.length < 7) return null;
   const latitude = Number(digits.slice(0, 4)) / 100;
   const longitudeDigits = digits.slice(4);
-  const longitude = -Number(longitudeDigits) / 100;
+  const longitudeValue = Number(longitudeDigits) / 100;
+  const longitude = -(longitudeDigits.length === 4 && longitudeDigits.startsWith("0") ? 100 + longitudeValue : longitudeValue);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return [longitude, latitude];
 }
@@ -305,6 +383,13 @@ function parseSpcDiscussionItem(item) {
   const description = item.querySelector("description")?.textContent || "";
   const preText = description.match(/<pre>\s*([\s\S]*?)<\/pre>/i)?.[1] || description;
   const number = title.match(/\bMD\s+(\d+)/i)?.[1] || link.match(/md(\d+)\.html/i)?.[1] || "";
+  const imageMatch = description.match(/<img[^>]+src=["']([^"']+)["']/i);
+  const imageUrl = imageMatch
+    ? new URL(imageMatch[1], "https://www.spc.noaa.gov/products/md/").href
+    : number
+      ? `https://www.spc.noaa.gov/products/md/mcd${number}.png`
+      : "";
+  const fullImageUrl = number ? `https://www.spc.noaa.gov/products/md/mcd${number}_full.png` : imageUrl;
   const wfos = [...preText.matchAll(/ATTN\.\.\.WFO\.\.\.([A-Z.\s]+?)\.\.\./gi)]
     .flatMap((match) => match[1].split(/\.+|\s+/))
     .map((office) => office.trim())
@@ -316,6 +401,8 @@ function parseSpcDiscussionItem(item) {
     number,
     title,
     link,
+    imageUrl,
+    fullImageUrl,
     pubDate: item.querySelector("pubDate")?.textContent || "",
     areas: spcSection(preText, "Areas affected"),
     concerning: spcSection(preText, "Concerning"),
@@ -733,9 +820,12 @@ async function loadAlertCountyOptions() {
 
   if (!activeSpcDiscussions.length) await fetchSpcDiscussions();
   countySpcDiscussionByCode = await spcDiscussionCountyMatches();
-  countySpcDiscussionByCode.forEach((discussion, code) => {
-    if (discussion) activeCountyCodes.add(code);
-  });
+  const includeSpcMdCounties = showSpcMdCounties();
+  if (includeSpcMdCounties) {
+    countySpcDiscussionByCode.forEach((discussion, code) => {
+      if (discussion) activeCountyCodes.add(code);
+    });
+  }
   activeCountyCodes.add(DEFAULT_COUNTY.code);
   activeCountyCodes.add(selectedCounty.code);
   countyAlertLevelByCode = nextAlertLevels;
@@ -746,7 +836,7 @@ async function loadAlertCountyOptions() {
       name: countyNameByCode.get(code) || code,
       label: countyOptionLabelByCode.get(code) || `${countyNameByCode.get(code) || code} (${code})`,
       level: countyAlertLevelByCode.get(code) || "",
-      spc: countySpcDiscussionByCode.has(code),
+      spc: includeSpcMdCounties && countySpcDiscussionByCode.has(code),
     }))
     .sort((a, b) => {
       if (a.code === DEFAULT_COUNTY.code) return -1;
@@ -826,8 +916,26 @@ async function renderSpcDiscussions() {
     return;
   }
   const matches = new Set((await matchingSpcDiscussions()).map((discussion) => discussion.id));
-  activeSpcDiscussions.forEach((discussion) => {
-    const card = makeElement("article", `spc-md-card ${matches.has(discussion.id) ? "match" : ""}`.trim());
+  const relevantDiscussions = activeSpcDiscussions.filter((discussion) => matches.has(discussion.id));
+  if (!relevantDiscussions.length) {
+    list.append(makeElement("div", "empty-state compact-empty", `No SPC mesoscale discussions are relevant to ${currentCountyName()}.`));
+    return;
+  }
+  relevantDiscussions.forEach((discussion) => {
+    const card = makeElement("article", "spc-md-card match");
+    if (discussion.imageUrl) {
+      const imageLink = makeElement("a", "spc-md-image-link");
+      imageLink.href = discussion.fullImageUrl || discussion.imageUrl;
+      imageLink.target = "_blank";
+      imageLink.rel = "noopener";
+      imageLink.setAttribute("aria-label", `Open SPC MD ${discussion.number || ""} graphic`.trim());
+      const image = makeElement("img", "spc-md-image");
+      image.src = discussion.imageUrl;
+      image.alt = `SPC MD ${discussion.number || ""} graphic`.trim();
+      image.loading = "lazy";
+      imageLink.append(image);
+      card.append(imageLink);
+    }
     const top = makeElement("div", "spc-md-top");
     top.append(makeElement("strong", "", `MD ${discussion.number || ""}`.trim()));
     top.append(makeElement("span", "", discussion.valid ? `Valid ${discussion.valid}` : formatTime(discussion.pubDate, true)));
@@ -841,14 +949,23 @@ async function renderSpcDiscussions() {
     ].filter(Boolean).join(" · ");
     card.append(makeElement("span", "spc-md-meta", meta || "SPC mesoscale discussion"));
     card.append(makeElement("span", "spc-md-summary", discussion.summary || "See SPC discussion for details."));
-    if (matches.has(discussion.id)) card.append(makeElement("span", "included-label", "Relevant to selected county"));
+    card.append(makeElement("span", "included-label", "Relevant to selected county"));
+    const actions = makeElement("div", "spc-md-actions");
+    if (discussion.fullImageUrl || discussion.imageUrl) {
+      const graphicLink = makeElement("a", "button tiny secondary", "SPC Graphic");
+      graphicLink.href = discussion.fullImageUrl || discussion.imageUrl;
+      graphicLink.target = "_blank";
+      graphicLink.rel = "noopener";
+      actions.append(graphicLink);
+    }
     if (discussion.link) {
       const link = makeElement("a", "spc-md-link", "Open SPC MD");
       link.href = discussion.link;
       link.target = "_blank";
       link.rel = "noopener";
-      card.append(link);
+      actions.append(link);
     }
+    if (actions.children.length) card.append(actions);
     list.append(card);
   });
 }
@@ -931,6 +1048,23 @@ async function loadNationalCities() {
   return nationalCitiesPromise;
 }
 
+async function loadPopulationCities() {
+  populationCitiesPromise ||= fetch(POPULATION_CITIES_URL, { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Population city list returned ${response.status}`);
+      return response.text();
+    })
+    .then((csv) => csv.trim().split(/\r?\n/).slice(1).map(parseCsvLine).map((row) => ({
+      name: row[0],
+      state: row[1],
+      population: Number(row[2]),
+      latitude: Number(row[3]),
+      longitude: Number(row[4]),
+    })).filter((city) => city.name && Number.isFinite(city.population) && Number.isFinite(city.latitude) && Number.isFinite(city.longitude))
+      .sort((a, b) => b.population - a.population));
+  return populationCitiesPromise;
+}
+
 async function loadNationalCounties() {
   nationalCountiesPromise ||= fetch(NATIONAL_COUNTIES_URL, { cache: "force-cache" })
     .then((response) => {
@@ -939,6 +1073,16 @@ async function loadNationalCounties() {
     })
     .then((data) => data.features || []);
   return nationalCountiesPromise;
+}
+
+async function loadNationalStates() {
+  nationalStatesPromise ||= fetch(NATIONAL_STATES_URL, { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`National state list returned ${response.status}`);
+      return response.json();
+    })
+    .then((data) => data.features || []);
+  return nationalStatesPromise;
 }
 
 async function loadNationalCountyZones() {
@@ -1009,6 +1153,17 @@ function setNationalMapStatus(message) {
   if (elements["national-map-status"]) elements["national-map-status"].textContent = message;
 }
 
+function applyNationalMapLayerVisibility() {
+  const svg = elements["national-map-svg"];
+  if (!svg) return;
+  svg.classList.toggle("hide-radar", !elements["national-map-radar"].checked);
+  svg.classList.toggle("hide-county-lines", !elements["national-map-county-lines"].checked);
+  svg.classList.toggle("hide-state-lines", !elements["national-map-state-lines"].checked);
+  svg.classList.toggle("hide-county-names", !elements["national-map-county-names"].checked);
+  svg.classList.toggle("hide-city-names", !elements["national-map-city-names"].checked);
+  svg.classList.toggle("hide-office-dots", !elements["national-map-office-dots"].checked);
+}
+
 function applyNationalMapTransform() {
   const viewport = elements["national-map-viewport"];
   if (!viewport) return;
@@ -1038,7 +1193,7 @@ function zoomNationalMap(multiplier, clientX = null, clientY = null) {
   const centerX = clientX == null ? viewWidth / 2 : ((clientX - rect.left) / rect.width) * viewWidth;
   const centerY = clientY == null ? viewHeight / 2 : ((clientY - rect.top) / rect.height) * viewHeight;
   const oldScale = nationalMapState.scale;
-  const nextScale = Math.min(8, Math.max(1, oldScale * multiplier));
+  const nextScale = Math.min(12, Math.max(1, oldScale * multiplier));
   nationalMapState.x = centerX - ((centerX - nationalMapState.x) / oldScale) * nextScale;
   nationalMapState.y = centerY - ((centerY - nationalMapState.y) / oldScale) * nextScale;
   nationalMapState.scale = nextScale;
@@ -1058,19 +1213,70 @@ function nationalMapCountyTitle(feature, alertData) {
 
 function syncNationalMapLabelScale() {
   const scale = nationalMapState.scale || 1;
-  elements["national-map-svg"]?.querySelectorAll(".major-city-label").forEach((label) => {
-    label.style.fontSize = `${(13 / scale).toFixed(2)}px`;
-    label.style.strokeWidth = `${(4 / scale).toFixed(2)}px`;
+  const showNationalCountyLabels = scale >= 5;
+  const visibleCityBoxes = [];
+  elements["national-map-svg"]?.querySelectorAll(".population-city-label").forEach((label) => {
+    const minZoom = Number(label.dataset.minZoom || 1);
+    const visible = scale >= minZoom;
+    label.style.display = visible ? "" : "none";
+    label.style.fontSize = `${((minZoom === 1 ? 13 : 11) / scale).toFixed(2)}px`;
+    label.style.strokeWidth = `${((minZoom === 1 ? 4 : 3) / scale).toFixed(2)}px`;
+    label.setAttribute("dx", (Number(label.dataset.offsetX || 6) / scale).toFixed(2));
+    label.setAttribute("dy", (Number(label.dataset.offsetY || -6) / scale).toFixed(2));
+    if (visible) {
+      const width = Number(label.dataset.labelWidth || 34) / scale;
+      const x = Number(label.getAttribute("x")) + Number(label.dataset.offsetX || 6) / scale;
+      const y = Number(label.getAttribute("y")) + (Number(label.dataset.offsetY || -6) - 12) / scale;
+      visibleCityBoxes.push({ x, y, width, height: 14 / scale });
+    }
   });
   elements["national-map-svg"]?.querySelectorAll(".national-map-label").forEach((label) => {
     label.style.fontSize = `${(11 / scale).toFixed(2)}px`;
   });
   elements["national-map-svg"]?.querySelectorAll(".county-name-label").forEach((label) => {
+    const alwaysVisible = label.dataset.alwaysVisible === "true";
+    const visible = alwaysVisible || showNationalCountyLabels;
+    const width = Number(label.dataset.labelWidth || 44) / scale;
+    const baseX = Number(label.dataset.baseX || label.getAttribute("x"));
+    const baseY = Number(label.dataset.baseY || label.getAttribute("y"));
+    const candidates = [
+      [0, 0],
+      [0, 18], [0, -18],
+      [24, 0], [-24, 0],
+      [22, 16], [-22, 16],
+      [22, -16], [-22, -16],
+      [0, 34], [0, -34],
+    ];
+    const spot = candidates.find(([dx, dy]) => {
+      const x = baseX + dx / scale - width / 2;
+      const y = baseY + dy / scale - 7 / scale;
+      return !visibleCityBoxes.some((box) => boxesOverlap({ x, y, width, height: 14 / scale }, box, 4 / scale));
+    });
+    label.style.display = visible && spot ? "" : "none";
+    if (spot) {
+      label.setAttribute("x", (baseX + spot[0] / scale).toFixed(2));
+      label.setAttribute("y", (baseY + spot[1] / scale).toFixed(2));
+    }
+    label.style.fontSize = `${((alwaysVisible ? 12 : 10) / scale).toFixed(2)}px`;
+    label.style.strokeWidth = `${((alwaysVisible ? 4 : 3) / scale).toFixed(2)}px`;
+  });
+  elements["national-map-svg"]?.querySelectorAll(".population-city-dot").forEach((dot) => {
+    const minZoom = Number(dot.dataset.minZoom || 1);
+    dot.style.display = scale >= minZoom ? "" : "none";
+    dot.setAttribute("r", ((minZoom === 1 ? 3.4 : 2.7) / scale).toFixed(2));
+  });
+  elements["national-map-svg"]?.querySelectorAll(".national-office-label").forEach((label) => {
+    const visible = scale >= 4;
+    label.style.display = visible ? "" : "none";
     label.style.fontSize = `${(12 / scale).toFixed(2)}px`;
     label.style.strokeWidth = `${(4 / scale).toFixed(2)}px`;
+    label.setAttribute("dx", (6 / scale).toFixed(2));
+    label.setAttribute("dy", (-6 / scale).toFixed(2));
   });
-  elements["national-map-svg"]?.querySelectorAll(".major-city-dot").forEach((dot) => {
-    dot.setAttribute("r", (3.4 / scale).toFixed(2));
+  elements["national-map-svg"]?.querySelectorAll(".national-office-dot").forEach((dot) => {
+    const visible = scale >= 4;
+    dot.style.display = visible ? "" : "none";
+    dot.setAttribute("r", (4 / scale).toFixed(2));
   });
 }
 
@@ -1103,6 +1309,104 @@ function populateNationalOfficeFilter(zones) {
   select.value = options.some((option) => option.office === previous) ? previous : "";
 }
 
+function nationalAlertFilterGroup(event) {
+  if (/Thunderstorm/i.test(event)) return 1;
+  if (/Tornado/i.test(event)) return 2;
+  if (/Flood|Flash Flood/i.test(event)) return 3;
+  if (/Winter|Snow|Ice|Blizzard/i.test(event)) return 4;
+  if (/Wind/i.test(event)) return 5;
+  if (/Heat|Cold|Freeze/i.test(event)) return 6;
+  if (/Fire|Red Flag/i.test(event)) return 7;
+  if (/Marine|Coastal|Surf|Rip Current/i.test(event)) return 8;
+  return 99;
+}
+
+function nationalAlertFilterActionPriority(event) {
+  if (/Warning$/i.test(event)) return 1;
+  if (/Watch$/i.test(event)) return 2;
+  return 3;
+}
+
+function nationalAlertFilterGroupLabel(event) {
+  const labels = {
+    1: "Thunderstorm",
+    2: "Tornado",
+    3: "Flood",
+    4: "Winter",
+    5: "Wind",
+    6: "Temperature",
+    7: "Fire",
+    8: "Marine",
+    99: "Other",
+  };
+  return labels[nationalAlertFilterGroup(event)] || "Other";
+}
+
+function populateNationalAlertTypeFilter(alerts) {
+  const container = elements["national-alert-type-filter"];
+  const previous = new Set(selectedNationalAlertTypeFilters());
+  const events = [...new Set(alerts
+    .map((feature) => feature.properties?.event || "")
+    .filter((event) => /\b(Warning|Watch)$/i.test(event)))]
+    .sort((a, b) => {
+      return nationalAlertFilterGroup(a) - nationalAlertFilterGroup(b)
+        || a.replace(/\b(Warning|Watch)$/i, "").localeCompare(b.replace(/\b(Warning|Watch)$/i, ""))
+        || nationalAlertFilterActionPriority(a) - nationalAlertFilterActionPriority(b)
+        || a.localeCompare(b);
+    });
+  const options = [
+    { value: "__warnings", label: "All warnings" },
+    { value: "__watches", label: "All watches" },
+    ...events.map((event) => ({ value: event, label: event })),
+  ];
+  const children = [];
+  let currentGroup = "";
+  options.forEach(({ value, label }) => {
+    const group = value.startsWith("__") ? "Broad filters" : nationalAlertFilterGroupLabel(label);
+    if (group !== currentGroup) {
+      children.push(makeElement("span", "national-alert-filter-group", group));
+      currentGroup = group;
+    }
+    const wrapper = makeElement("label", "");
+    const input = makeElement("input", "");
+    input.type = "checkbox";
+    input.value = value;
+    input.checked = previous.has(value);
+    wrapper.append(input, document.createTextNode(label));
+    children.push(wrapper);
+  });
+  container.replaceChildren(...children);
+  updateNationalAlertTypeSummary();
+}
+
+function selectedNationalAlertTypeFilters() {
+  return [...elements["national-alert-type-filter"].querySelectorAll("input:checked")].map((input) => input.value);
+}
+
+function nationalAlertTypeLabel(value) {
+  return { __warnings: "All warnings", __watches: "All watches" }[value] || value;
+}
+
+function updateNationalAlertTypeSummary() {
+  const selected = selectedNationalAlertTypeFilters();
+  const label = !selected.length
+    ? "All"
+    : selected.length === 1
+      ? nationalAlertTypeLabel(selected[0])
+      : `${selected.length} selected`;
+  elements["national-alert-type-summary"].textContent = `Alert types: ${label}`;
+}
+
+function nationalMapAlertMatchesFilter(properties, filterValues = []) {
+  const event = properties?.event || "";
+  if (!filterValues.length) return true;
+  return filterValues.some((filterValue) => {
+    if (filterValue === "__warnings") return /Warning$/i.test(event);
+    if (filterValue === "__watches") return /Watch$/i.test(event);
+    return event === filterValue;
+  });
+}
+
 function nationalMapFitTransform(counties) {
   if (!counties.length) return null;
   const projected = counties
@@ -1121,7 +1425,7 @@ function nationalMapFitTransform(counties) {
   const padding = 46;
   const width = Math.max(bounds.maxX - bounds.minX, 1);
   const height = Math.max(bounds.maxY - bounds.minY, 1);
-  const scale = Math.min(7.5, Math.max(1, Math.min((1000 - padding * 2) / width, (620 - padding * 2) / height)));
+  const scale = Math.min(10, Math.max(1, Math.min((1000 - padding * 2) / width, (620 - padding * 2) / height)));
   return {
     scale,
     x: padding + ((1000 - padding * 2) - width * scale) / 2 - bounds.minX * scale,
@@ -1134,7 +1438,7 @@ function cityInsideProjectedCounties(city, counties) {
   return counties.some((county) => pointInGeometry(place, county.geometry));
 }
 
-function drawCountyNameLabels(layer, counties, alertCountyFips) {
+function drawCountyNameLabels(layer, counties, alertCountyFips, { alwaysVisible = false } = {}) {
   counties.forEach((feature) => {
     const bounds = geometryBounds(feature.geometry);
     if (!bounds) return;
@@ -1146,22 +1450,124 @@ function drawCountyNameLabels(layer, counties, alertCountyFips) {
       class: `county-name-label ${alertCountyFips.has(String(feature.id || "")) ? "alert" : ""}`.trim(),
       x,
       y,
+      "data-base-x": String(x),
+      "data-base-y": String(y),
+      "data-always-visible": String(alwaysVisible),
+      "data-label-width": String(Math.max((feature.properties?.NAME || "County").length * 6.2, 34)),
     });
     label.textContent = feature.properties?.NAME || "County";
     layer.append(label);
   });
 }
 
-function drawNationalMap(counties, alerts, zones, officeId = "") {
+function cityMinZoom(city) {
+  if (city.population >= 500_000) return 1;
+  if (city.population >= 200_000) return 3;
+  if (city.population >= 75_000) return 4;
+  return 4.8;
+}
+
+function populationCityLabel(city) {
+  const duplicateName = city.name === "Portland" || city.name === "Springfield" || city.name === "Columbia" || city.name === "Columbus";
+  return duplicateName ? `${city.name}, ${city.state}` : city.name;
+}
+
+function drawPopulationCityLabels(layer, cities, counties) {
+  const visibleCities = counties.length
+    ? cities.filter((city) => cityInsideProjectedCounties(city, counties))
+    : cities;
+  const occupied = [];
+  visibleCities.slice(0, 500).forEach((city) => {
+    const point = nationalProjection(city.longitude, city.latitude);
+    if (!point) return;
+    const [x, y] = point;
+    const minZoom = cityMinZoom(city);
+    const labelText = populationCityLabel(city);
+    const width = Math.max(labelText.length * 6.8, 34);
+    const candidates = [
+      [6, -6],
+      [6, 12],
+      [-width - 6, -6],
+      [-width - 6, 12],
+      [10, -22],
+      [-width - 10, -22],
+      [10, 26],
+      [-width - 10, 26],
+    ];
+    const spot = candidates.find(([dx, dy]) => {
+      const screenBox = { x: x + dx / minZoom, y: y + (dy - 12) / minZoom, width: width / minZoom, height: 14 / minZoom };
+      return !occupied.some((other) => {
+        if (other.minZoom > minZoom) return false;
+        const otherBox = {
+          x: other.x + other.dx / minZoom,
+          y: other.y + (other.dy - 12) / minZoom,
+          width: other.width / minZoom,
+          height: 14 / minZoom,
+        };
+        return boxesOverlap(screenBox, otherBox, 2 / minZoom);
+      });
+    });
+    if (!spot) return;
+    occupied.push({ x, y, width, minZoom, dx: spot[0], dy: spot[1], city: city.name });
+
+    const dot = makeSvgElement("circle", {
+      class: "population-city-dot",
+      cx: x,
+      cy: y,
+      r: city.population >= 500_000 ? 3.4 : 2.7,
+      "data-min-zoom": String(minZoom),
+    });
+    const label = makeSvgElement("text", {
+      class: "population-city-label",
+      x,
+      y,
+      "data-min-zoom": String(minZoom),
+      "data-label-width": String(width),
+      "data-offset-x": String(spot[0]),
+      "data-offset-y": String(spot[1]),
+    });
+    label.textContent = labelText;
+    layer.append(dot, label);
+  });
+}
+
+function drawNwsOfficeMarkers(layer, zones, counties) {
+  const countyByFips = new Map(counties.map((county) => [String(county.id || ""), county]));
+  const offices = new Map();
+  zones.forEach((zone) => {
+    const office = zoneOfficeId(zone);
+    const county = countyByFips.get(zoneFips(zone));
+    const bounds = county ? geometryBounds(county.geometry) : null;
+    if (!office || !bounds) return;
+    const center = boundsCenter(bounds);
+    const record = offices.get(office) || { office, longitude: 0, latitude: 0, count: 0 };
+    record.longitude += center[0];
+    record.latitude += center[1];
+    record.count += 1;
+    offices.set(office, record);
+  });
+  [...offices.values()].forEach((office) => {
+    const point = nationalProjection(office.longitude / office.count, office.latitude / office.count);
+    if (!point) return;
+    const [x, y] = point;
+    layer.append(makeSvgElement("circle", { class: "national-office-dot", cx: x, cy: y, r: 4 }));
+    const label = makeSvgElement("text", { class: "national-office-label", x, y });
+    label.textContent = office.office;
+    layer.append(label);
+  });
+}
+
+function drawNationalMap(counties, alerts, zones, officeId = "", alertTypeFilters = []) {
   const viewport = elements["national-map-viewport"];
   viewport.replaceChildren();
   const countyAlerts = new Map();
   const alertPolygons = [];
+  const filteredAlerts = alerts.filter((feature) => nationalMapAlertMatchesFilter(feature.properties, alertTypeFilters));
   const officeCountyFips = new Set(zones.filter((zone) => !officeId || zoneOfficeId(zone) === officeId).map(zoneFips).filter((fips) => fips.length === 5));
   const visibleCounties = officeId ? counties.filter((feature) => officeCountyFips.has(String(feature.id || ""))) : counties;
   const visibleCountyFips = new Set(visibleCounties.map((feature) => String(feature.id || "")));
 
-  alerts.forEach((feature) => {
+  filteredAlerts.forEach((feature) => {
     const properties = feature.properties || {};
     const level = nationalAlertLevel(properties);
     const affectedFips = [];
@@ -1197,6 +1603,29 @@ function drawNationalMap(counties, alerts, zones, officeId = "") {
   });
   viewport.append(countyLayer);
 
+  const radarLayer = makeSvgElement("g", { class: "national-radar-layer" });
+  radarLayer.append(makeSvgElement("image", {
+    class: "national-radar-overlay",
+    href: `${NATIONAL_RADAR_URL}&_=${Date.now()}`,
+    x: NATIONAL_RADAR_FRAME.x,
+    y: NATIONAL_RADAR_FRAME.y,
+    width: NATIONAL_RADAR_FRAME.width,
+    height: NATIONAL_RADAR_FRAME.height,
+    preserveAspectRatio: "none",
+  }));
+  viewport.append(radarLayer);
+
+  const stateLayer = makeSvgElement("g", { class: "national-state-layer" });
+  nationalMapData.states.forEach((feature) => {
+    const pathData = geometryToSvgPath(feature.geometry);
+    if (!pathData) return;
+    stateLayer.append(makeSvgElement("path", {
+      class: "national-state-line",
+      d: pathData,
+    }));
+  });
+  viewport.append(stateLayer);
+
   const polygonLayer = makeSvgElement("g", { class: "national-alert-layer" });
   alertPolygons.forEach((alert) => {
     const path = makeSvgElement("path", {
@@ -1221,29 +1650,29 @@ function drawNationalMap(counties, alerts, zones, officeId = "") {
   });
   viewport.append(insetLabels);
 
-  const cityLayer = makeSvgElement("g", { class: "major-city-layer" });
-  const cities = officeId ? MAJOR_US_CITIES.filter((city) => cityInsideProjectedCounties(city, visibleCounties)) : MAJOR_US_CITIES;
-  cities.forEach((city) => {
-    const point = nationalProjection(city.longitude, city.latitude);
-    if (!point) return;
-    const [x, y] = point;
-    cityLayer.append(makeSvgElement("circle", { class: "major-city-dot", cx: x, cy: y, r: 3.4 }));
-    const label = makeSvgElement("text", { class: "major-city-label", x: x + 6, y: y - 6 });
-    label.textContent = city.name;
-    cityLayer.append(label);
-  });
+  const cityLayer = makeSvgElement("g", { class: "population-city-layer" });
+  drawPopulationCityLabels(cityLayer, nationalMapData.cities.length ? nationalMapData.cities : MAJOR_US_CITIES.map((city) => ({ ...city, population: 500_000 })), officeId ? visibleCounties : []);
   viewport.append(cityLayer);
 
-  if (officeId) {
-    const countyLabelLayer = makeSvgElement("g", { class: "county-name-layer" });
-    drawCountyNameLabels(countyLabelLayer, visibleCounties, countyAlerts);
-    viewport.append(countyLabelLayer);
-  }
+  const countyLabelLayer = makeSvgElement("g", { class: `county-name-layer ${officeId ? "office" : "national"}`.trim() });
+  drawCountyNameLabels(countyLabelLayer, visibleCounties, countyAlerts, { alwaysVisible: Boolean(officeId) });
+  viewport.append(countyLabelLayer);
+
+  const officeLayer = makeSvgElement("g", { class: "national-office-layer" });
+  drawNwsOfficeMarkers(officeLayer, officeId ? zones.filter((zone) => zoneOfficeId(zone) === officeId) : zones, visibleCounties);
+  viewport.append(officeLayer);
 
   resetNationalMapZoom(officeId ? nationalMapFitTransform(visibleCounties) : null);
   const officeText = officeId ? `${officeId} coverage` : "nationally";
   const countyText = officeId ? `${visibleCounties.length} count${visibleCounties.length === 1 ? "y" : "ies"} in ${officeId} coverage` : `${countyAlerts.size} affected count${countyAlerts.size === 1 ? "y" : "ies"}`;
-  setNationalMapStatus(`Loaded ${alerts.length} active NWS alert${alerts.length === 1 ? "" : "s"} ${officeText}. Showing ${countyText}; highlighted ${countyAlerts.size} with active alerts.`);
+  const filterText = alertTypeFilters.length
+    ? ` matching ${alertTypeFilters.map((value) => ({
+      __warnings: "All warnings",
+      __watches: "All watches",
+    }[value] || value)).join(", ")}`
+    : "";
+  setNationalMapStatus(`Loaded ${filteredAlerts.length} of ${alerts.length} active NWS alert${alerts.length === 1 ? "" : "s"}${filterText} ${officeText}. Showing ${countyText}; highlighted ${countyAlerts.size} with active alerts.`);
+  applyNationalMapLayerVisibility();
 }
 
 function renderNationalMapFromState() {
@@ -1252,6 +1681,7 @@ function renderNationalMapFromState() {
     nationalMapData.alerts,
     nationalMapData.zones,
     elements["national-office-select"].value,
+    selectedNationalAlertTypeFilters(),
   );
 }
 
@@ -1269,15 +1699,18 @@ async function openNationalMap() {
   const button = elements["open-national-map"];
   button.disabled = true;
   try {
-    const [counties, zones, alertsResponse] = await Promise.all([
+    const [counties, states, zones, cities, alertsResponse] = await Promise.all([
       loadNationalCounties(),
+      loadNationalStates().catch(() => []),
       loadNationalCountyZones(),
+      loadPopulationCities().catch(() => []),
       fetch(NATIONAL_ALERTS_URL, { headers: { Accept: "application/geo+json" }, cache: "no-store" }),
     ]);
     if (!alertsResponse.ok) throw new Error(`National alert list returned ${alertsResponse.status}`);
     const alertsData = await alertsResponse.json();
-    nationalMapData = { counties, alerts: alertsData.features || [], zones };
+    nationalMapData = { counties, states, alerts: alertsData.features || [], zones, cities };
     populateNationalOfficeFilter(zones);
+    populateNationalAlertTypeFilter(nationalMapData.alerts);
     renderNationalMapFromState();
   } catch {
     setNationalMapStatus("The national map could not be loaded. Check the network connection and try again.");
@@ -1488,7 +1921,7 @@ function renderAlerts() {
   const list = elements["alerts-list"];
   list.replaceChildren();
   const supported = activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).sort((a, b) => alertPriority(a) - alertPriority(b));
-  elements["active-count"].textContent = exerciseMode ? `${supported.length} training` : `${supported.length} active`;
+  if (elements["active-count"]) elements["active-count"].textContent = exerciseMode ? `${supported.length} training` : `${supported.length} active`;
 
   if (!supported.length) {
     const empty = makeElement("div", "empty-state");
@@ -1680,6 +2113,9 @@ function selectAlert(alert, isTraining) {
   updateNixleCount();
   elements["facebook-message"].value = alertRecord.facebookMessage;
   elements["share-facebook"].disabled = isTraining;
+  elements["open-nixle"].classList.toggle("disabled-link", isTraining);
+  elements["open-nixle"].setAttribute("aria-disabled", String(isTraining));
+  elements["open-nixle"].tabIndex = isTraining ? -1 : 0;
   elements["open-facebook"].classList.toggle("disabled-link", isTraining);
   elements["open-facebook"].setAttribute("aria-disabled", String(isTraining));
   elements["open-facebook"].tabIndex = isTraining ? -1 : 0;
@@ -2953,8 +3389,22 @@ async function changeCounty(event) {
 }
 
 elements["county-select"].addEventListener("change", changeCounty);
+elements["show-spc-md"].addEventListener("change", async (event) => {
+  localStorage.setItem(SHOW_SPC_MD_KEY, String(event.target.checked));
+  await loadAlertCountyOptions();
+});
 elements["open-national-map"].addEventListener("click", openNationalMap);
 elements["national-office-select"].addEventListener("change", renderNationalMapFromState);
+elements["national-alert-type-filter"].addEventListener("change", () => {
+  updateNationalAlertTypeSummary();
+  renderNationalMapFromState();
+});
+elements["national-map-radar"].addEventListener("change", applyNationalMapLayerVisibility);
+elements["national-map-county-lines"].addEventListener("change", applyNationalMapLayerVisibility);
+elements["national-map-state-lines"].addEventListener("change", applyNationalMapLayerVisibility);
+elements["national-map-county-names"].addEventListener("change", applyNationalMapLayerVisibility);
+elements["national-map-city-names"].addEventListener("change", applyNationalMapLayerVisibility);
+elements["national-map-office-dots"].addEventListener("change", applyNationalMapLayerVisibility);
 elements["national-map-zoom-in"].addEventListener("click", () => zoomNationalMap(1.35));
 elements["national-map-zoom-out"].addEventListener("click", () => zoomNationalMap(1 / 1.35));
 elements["national-map-reset"].addEventListener("click", () => resetNationalMapZoom(currentNationalMapFit()));
@@ -2963,6 +3413,7 @@ elements["national-map-svg"].addEventListener("wheel", (event) => {
   zoomNationalMap(event.deltaY < 0 ? 1.18 : 1 / 1.18, event.clientX, event.clientY);
 }, { passive: false });
 elements["national-map-svg"].addEventListener("pointerdown", (event) => {
+  event.preventDefault();
   if (nationalMapState.scale <= 1) return;
   elements["national-map-svg"].setPointerCapture(event.pointerId);
   elements["national-map-svg"].classList.add("dragging");
@@ -3002,6 +3453,9 @@ elements["copy-message"].addEventListener("click", copyMessage);
 elements["copy-nixle"].addEventListener("click", copyNixle);
 elements["copy-facebook"].addEventListener("click", copyFacebook);
 elements["share-facebook"].addEventListener("click", shareFacebook);
+elements["open-nixle"].addEventListener("click", (event) => {
+  if (trainingMode) event.preventDefault();
+});
 elements["open-facebook"].addEventListener("click", (event) => {
   if (trainingMode) event.preventDefault();
 });
@@ -3156,6 +3610,7 @@ if (restoredIncidentId) {
 }
 ensureOperationsTimer();
 renderAlertSoundControl();
+elements["show-spc-md"].checked = localStorage.getItem(SHOW_SPC_MD_KEY) !== "false";
 document.addEventListener("pointerdown", () => {
   if (alertSoundEnabled) getAlertAudioContext()?.resume();
 }, { once: true });
