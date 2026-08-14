@@ -86,6 +86,7 @@ Current backend endpoints:
 - `GET /api/state/current` returns the shared dashboard state placeholder.
 - `PUT /api/state/current` saves shared dashboard state JSON. If `ADMIN_TOKEN` is set, send `Authorization: Bearer <token>`.
 - `GET /api/presence` returns connected live clients.
+- `PUT /api/presence/client` updates the connected browser's display name.
 - `GET /api/events` streams shared state and connected-client updates with Server-Sent Events.
 
 Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.

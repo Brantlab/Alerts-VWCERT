@@ -35,6 +35,7 @@ const STORAGE_KEY = "vwcert-incidents-v2";
 const ACTIVE_INCIDENT_KEY = "vwcert-active-incident-v2";
 const ALERT_SOUND_KEY = "vwcert-alert-sound-v1";
 const SHOW_SPC_MD_KEY = "vwcert-show-spc-md-v1";
+const PRESENCE_NAME_KEY = "vwcert-presence-name-v1";
 const POLL_INTERVAL = 30_000;
 const MAX_INCIDENTS = 30;
 const SIREN_DURATION = 3 * 60_000;
@@ -197,6 +198,8 @@ let sharedStateApplying = false;
 let sharedStateLastUpdatedAt = "";
 let sharedStatePublishTimer = null;
 let backendEvents = null;
+const presenceClientId = sessionStorage.getItem("vwcert-presence-client-id") || crypto.randomUUID();
+sessionStorage.setItem("vwcert-presence-client-id", presenceClientId);
 
 const trainingPolygons = {
   southeast: { area: "southeastern", points: [[-84.62, 40.84], [-84.34, 40.83], [-84.35, 40.67], [-84.57, 40.69]] },
@@ -1013,9 +1016,9 @@ function setBackendStatus(status) {
 function setConnectedClients(clients = []) {
   const element = elements["connected-clients"];
   if (!element) return;
-  const ips = [...new Set(clients.map((client) => client.ip).filter(Boolean))];
+  const labels = clients.map((client) => client.name ? `${client.name} @ ${client.ip}` : client.ip).filter(Boolean);
   element.textContent = clients.length
-    ? `Connected: ${clients.length}${ips.length ? ` (${ips.join(", ")})` : ""}`
+    ? `Connected: ${clients.length}${labels.length ? ` (${labels.join(", ")})` : ""}`
     : "Connected: —";
 }
 
@@ -1031,6 +1034,24 @@ function backendHeaders() {
   const headers = { "content-type": "application/json" };
   if (window.VWCERT_API_TOKEN) headers.authorization = `Bearer ${window.VWCERT_API_TOKEN}`;
   return headers;
+}
+
+function currentPresenceName() {
+  return (elements["presence-name"]?.value || "").replace(/\s+/g, " ").trim();
+}
+
+async function updatePresenceName() {
+  localStorage.setItem(PRESENCE_NAME_KEY, currentPresenceName());
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/api/presence/client`, {
+      method: "PUT",
+      headers: backendHeaders(),
+      body: JSON.stringify({ id: presenceClientId, name: currentPresenceName() }),
+    });
+    if (response.ok) setConnectedClients((await response.json()).clients || []);
+  } catch {
+    // Presence name updates are best-effort; the connection badge owns failures.
+  }
 }
 
 function jsonClone(value) {
@@ -1239,7 +1260,8 @@ async function checkBackendStatus() {
 
 function connectBackendEvents() {
   if (!window.EventSource || backendEvents) return;
-  backendEvents = new EventSource(`${BACKEND_API_URL}/api/events`);
+  const params = new URLSearchParams({ clientId: presenceClientId, name: currentPresenceName() });
+  backendEvents = new EventSource(`${BACKEND_API_URL}/api/events?${params}`);
   backendEvents.addEventListener("open", () => setBackendStatus("connected"));
   backendEvents.addEventListener("presence", (event) => {
     try {
@@ -3891,9 +3913,14 @@ if (restoredIncidentId) {
 ensureOperationsTimer();
 renderAlertSoundControl();
 elements["show-spc-md"].checked = localStorage.getItem(SHOW_SPC_MD_KEY) !== "false";
+elements["presence-name"].value = localStorage.getItem(PRESENCE_NAME_KEY) || "";
 checkBackendStatus();
 setInterval(checkBackendStatus, 60_000);
 setInterval(pollSharedState, 8_000);
+elements["presence-name"].addEventListener("input", () => {
+  clearTimeout(elements["presence-name"]._presenceTimer);
+  elements["presence-name"]._presenceTimer = setTimeout(updatePresenceName, 350);
+});
 document.addEventListener("pointerdown", () => {
   if (alertSoundEnabled) getAlertAudioContext()?.resume();
 }, { once: true });

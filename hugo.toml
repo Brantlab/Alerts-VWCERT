@@ -5,5 +5,5 @@ disableKinds = ["taxonomy", "term", "RSS", "sitemap", "robotsTXT"]
 
 [params]
   description = "Van Wert County severe weather radio message and event log"
-  appVersion = "0.2.0"
+  appVersion = "0.2.1"
 

@@ -57,6 +57,10 @@ function clientLabel(request, id) {
   return ip === "::1" || ip === "127.0.0.1" ? `local-${id.slice(0, 4)}` : ip;
 }
 
+function cleanClientName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 48);
+}
+
 function connectedClients() {
   const cutoff = Date.now() - presenceTimeout;
   return [...eventClients.values()]
@@ -64,6 +68,7 @@ function connectedClients() {
     .map((client) => ({
       id: client.id,
       ip: client.ip,
+      name: client.name || "",
       connectedAt: client.connectedAt,
       lastSeen: new Date(client.lastSeen).toISOString(),
     }))
@@ -182,8 +187,26 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/presence/client" && request.method === "PUT") {
+    const body = await readRequestJson(request);
+    const id = cleanClientName(body.id);
+    if (!id) {
+      jsonResponse(response, 400, { error: "Client id is required" }, headers);
+      return;
+    }
+    const existing = eventClients.get(id);
+    if (existing) {
+      existing.name = cleanClientName(body.name);
+      existing.lastSeen = Date.now();
+      broadcastPresence();
+    }
+    jsonResponse(response, 200, { clients: connectedClients() }, headers);
+    return;
+  }
+
   if (url.pathname === "/api/events" && request.method === "GET") {
-    const id = randomUUID();
+    const requestedId = cleanClientName(url.searchParams.get("clientId"));
+    const id = requestedId || randomUUID();
     const now = new Date().toISOString();
     response.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -195,6 +218,7 @@ async function handleRequest(request, response) {
     const client = {
       id,
       ip: clientLabel(request, id),
+      name: cleanClientName(url.searchParams.get("name")),
       connectedAt: now,
       lastSeen: Date.now(),
       response,

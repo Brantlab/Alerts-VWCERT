@@ -267,6 +267,8 @@ footer p { margin: .3rem; }
 .shared-status.synced { color: var(--green); }
 .shared-status.error { color: var(--red); }
 .connected-clients { font-weight: 750; }
+.presence-name { display: inline-flex; align-items: center; gap: .35rem; color: var(--muted); font-weight: 750; }
+.presence-name input { width: 150px; min-height: 28px; padding: .25rem .45rem; border: 1px solid var(--line); border-radius: 7px; font-size: .75rem; font-weight: 700; }
 .safety-note { font-weight: 650; }
 .noscript { position: fixed; inset: auto 0 0; padding: 1rem; color: white; background: var(--red); text-align: center; }
 .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; }
