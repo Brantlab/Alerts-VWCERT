@@ -365,6 +365,8 @@ footer p { margin: .3rem; }
 .choice-label input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--teal); }
 .spotter-department-name { color: var(--navy) !important; background: #f8faf9; font-size: .78rem !important; text-transform: none !important; letter-spacing: 0 !important; }
 .spotter-tracking-table .time-entry { min-width: 175px; }
+.spotter-units-table input, .spotter-units-table select { width: 100%; min-width: 115px; }
+.spotter-units-table td:nth-child(3) input { min-width: 190px; }
 .spotter-reports-table select, .spotter-reports-table input { min-width: 145px; }
 .spotter-reports-table td:nth-child(4) input { min-width: 230px; }
 .report-time-entry { display: grid; gap: .3rem; min-width: 105px; }

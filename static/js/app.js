@@ -2750,18 +2750,65 @@ function renderSpotterActivation() {
   if (!units.length) {
     const row = document.createElement("tr");
     const cell = makeElement("td", "empty-table", "No department units have checked in from the spotter page.");
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     row.append(cell);
     unitList.append(row);
   }
   units.forEach((unit) => {
     const row = document.createElement("tr");
+    const unitInput = document.createElement("input");
+    unitInput.type = "text";
+    unitInput.value = unit.unitNumber || "";
+    unitInput.addEventListener("input", () => {
+      unit.unitNumber = unitInput.value;
+      unit.updatedAt = new Date().toISOString();
+      persistIncident();
+    });
+    const locationInput = document.createElement("input");
+    locationInput.type = "text";
+    locationInput.value = unit.location || "";
+    locationInput.addEventListener("input", () => {
+      unit.location = locationInput.value;
+      unit.updatedAt = new Date().toISOString();
+      persistIncident();
+    });
+    const statusSelect = document.createElement("select");
+    ["Available", "Monitoring", "En route", "On scene", "Unavailable"].forEach((status) => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status;
+      statusSelect.append(option);
+    });
+    statusSelect.value = unit.status || "Available";
+    statusSelect.addEventListener("change", () => {
+      unit.status = statusSelect.value;
+      unit.updatedAt = new Date().toISOString();
+      persistIncident();
+      renderSpotterActivation();
+    });
+    const unitCell = document.createElement("td");
+    unitCell.append(unitInput);
+    const locationCell = document.createElement("td");
+    locationCell.append(locationInput);
+    const statusCell = document.createElement("td");
+    statusCell.append(statusSelect);
+    const removeCell = document.createElement("td");
+    const remove = makeElement("button", "icon-button", "×");
+    remove.type = "button";
+    remove.title = "Remove unit check-in";
+    remove.addEventListener("click", () => {
+      delete spotter.units[unit.id];
+      persistIncident();
+      renderSpotterActivation();
+    });
+    removeCell.append(remove);
     row.append(
       makeElement("td", "", unit.department || "—"),
-      makeElement("td", "", unit.unitNumber || "—"),
-      makeElement("td", "", unit.location || "—"),
-      makeElement("td", "", unit.status || "Available"),
+      unitCell,
+      locationCell,
+      statusCell,
       makeElement("td", "", formatTime(unit.updatedAt)),
+      removeCell,
     );
     unitList.append(row);
   });
