@@ -594,6 +594,10 @@ function spotterActivation(incident = selectedIncident) {
   return incident.spotterActivation;
 }
 
+function spotterStatusClass(status = "") {
+  return `spotter-status-${String(status || "available").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z-]/g, "") || "available"}`;
+}
+
 function initializeSpotterFromIncident() {
   const spotter = spotterActivation();
   if (!spotter || spotter.initialized) return;
@@ -2746,7 +2750,11 @@ function renderSpotterActivation() {
 
   const unitList = elements["spotter-unit-list"];
   unitList.replaceChildren();
-  const units = Object.values(spotter.units || {}).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  const units = Object.values(spotter.units || {}).sort((a, b) => (
+    (a.department || "").localeCompare(b.department || "")
+    || (a.unitNumber || "").localeCompare(b.unitNumber || "")
+    || new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+  ));
   if (!units.length) {
     const row = document.createElement("tr");
     const cell = makeElement("td", "empty-table", "No department units have checked in from the spotter page.");
@@ -2754,8 +2762,20 @@ function renderSpotterActivation() {
     row.append(cell);
     unitList.append(row);
   }
+  let currentUnitDepartment = "";
   units.forEach((unit) => {
+    const department = unit.department || "Unassigned";
+    if (department !== currentUnitDepartment) {
+      currentUnitDepartment = department;
+      const groupRow = document.createElement("tr");
+      const groupCell = makeElement("th", "spotter-unit-group", department);
+      groupCell.scope = "rowgroup";
+      groupCell.colSpan = 6;
+      groupRow.append(groupCell);
+      unitList.append(groupRow);
+    }
     const row = document.createElement("tr");
+    row.className = `spotter-unit-row ${spotterStatusClass(unit.status)}`;
     const unitInput = document.createElement("input");
     unitInput.type = "text";
     unitInput.value = unit.unitNumber || "";
@@ -2780,9 +2800,11 @@ function renderSpotterActivation() {
       statusSelect.append(option);
     });
     statusSelect.value = unit.status || "Available";
+    statusSelect.className = spotterStatusClass(unit.status);
     statusSelect.addEventListener("change", () => {
       unit.status = statusSelect.value;
       unit.updatedAt = new Date().toISOString();
+      statusSelect.className = spotterStatusClass(unit.status);
       persistIncident();
       renderSpotterActivation();
     });

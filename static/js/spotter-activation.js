@@ -54,6 +54,10 @@ function setSaveStatus(text, className = "") {
   elements["save-status"].textContent = text;
 }
 
+function statusClass(status = "") {
+  return `status-${String(status || "available").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z-]/g, "") || "available"}`;
+}
+
 function allUnits() {
   return Object.values(latestState?.activeIncident?.spotterActivation?.units || {})
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
@@ -108,7 +112,7 @@ function renderAllUnits() {
   }
   units.forEach((unit) => {
     const card = document.createElement("div");
-    card.className = "unit-card";
+    card.className = `unit-card ${statusClass(unit.status)}`;
     const content = document.createElement("div");
     const heading = document.createElement("strong");
     heading.textContent = `${unit.department || "Department"} - ${unit.unitNumber || "Unit"}`;

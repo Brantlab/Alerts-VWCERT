@@ -365,8 +365,19 @@ footer p { margin: .3rem; }
 .choice-label input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--teal); }
 .spotter-department-name { color: var(--navy) !important; background: #f8faf9; font-size: .78rem !important; text-transform: none !important; letter-spacing: 0 !important; }
 .spotter-tracking-table .time-entry { min-width: 175px; }
+.spotter-unit-group { padding: .45rem .6rem !important; color: var(--navy) !important; background: #e8f2f4; font-size: .78rem !important; letter-spacing: .06em; text-transform: uppercase; }
+.spotter-unit-row.spotter-status-available td { background: #eef8f3; }
+.spotter-unit-row.spotter-status-monitoring td { background: #fff8d7; }
+.spotter-unit-row.spotter-status-en-route td { background: #e8f2ff; }
+.spotter-unit-row.spotter-status-on-scene td { background: #fde8eb; }
+.spotter-unit-row.spotter-status-unavailable td { background: #eef1f3; color: #6c7880; }
 .spotter-units-table input, .spotter-units-table select { width: 100%; min-width: 115px; }
 .spotter-units-table td:nth-child(3) input { min-width: 190px; }
+.spotter-units-table select.spotter-status-available { border-color: #91c8ad; background: #eef8f3; }
+.spotter-units-table select.spotter-status-monitoring { border-color: #d8bd52; background: #fff8d7; }
+.spotter-units-table select.spotter-status-en-route { border-color: #9dbfe7; background: #e8f2ff; }
+.spotter-units-table select.spotter-status-on-scene { border-color: #e49aa5; background: #fde8eb; }
+.spotter-units-table select.spotter-status-unavailable { border-color: #b9c3c8; background: #eef1f3; }
 .spotter-reports-table select, .spotter-reports-table input { min-width: 145px; }
 .spotter-reports-table td:nth-child(4) input { min-width: 230px; }
 .report-time-entry { display: grid; gap: .3rem; min-width: 105px; }

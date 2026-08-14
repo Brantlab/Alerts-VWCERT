@@ -1,5 +1,5 @@
 const API_BASE_URL = window.VWCERT_API_URL || "https://api.vwcert.org";
-const VERSION = "0.4.0";
+const VERSION = "0.4.3";
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
 const clientId = sessionStorage.getItem("vwcert-eoc-client-id") || `eoc-${crypto.randomUUID()}`;
 sessionStorage.setItem("vwcert-eoc-client-id", clientId);
@@ -70,6 +70,10 @@ function activeSirenCycle(cycles = []) {
   return [...cycles].reverse().find((cycle) => !cycle.endedAt);
 }
 
+function statusClass(status = "") {
+  return `status-${String(status || "available").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z-]/g, "") || "available"}`;
+}
+
 function renderLogs(incident) {
   const logs = allLogs(incident).slice(0, 8);
   elements["activity-log"].replaceChildren();
@@ -128,15 +132,26 @@ function renderSpotter(incident) {
     empty.textContent = "No unit check-ins.";
     elements["spotter-unit-grid"].append(empty);
   }
-  units.slice(0, 6).forEach((unit) => {
-    const card = document.createElement("div");
-    card.className = "unit-pill";
+  const groupedUnits = Map.groupBy
+    ? Map.groupBy(units, (unit) => unit.department || "Unassigned")
+    : units.reduce((map, unit) => {
+      const key = unit.department || "Unassigned";
+      map.set(key, [...(map.get(key) || []), unit]);
+      return map;
+    }, new Map());
+  [...groupedUnits.entries()].slice(0, 6).forEach(([department, departmentUnits]) => {
+    const group = document.createElement("div");
+    group.className = "unit-dept-group";
     const heading = document.createElement("strong");
-    heading.textContent = `${unit.department || "Dept"} - ${unit.unitNumber || "Unit"}`;
-    const detail = document.createElement("span");
-    detail.textContent = `${unit.status || "Available"} - ${unit.location || "No location"}`;
-    card.append(heading, detail);
-    elements["spotter-unit-grid"].append(card);
+    heading.textContent = department;
+    const subtitle = document.createElement("span");
+    subtitle.textContent = departmentUnits
+      .slice(0, 3)
+      .map((unit) => `${unit.unitNumber || "Unit"}: ${unit.status || "Available"}${unit.location ? ` @ ${unit.location}` : ""}`)
+      .join(" | ");
+    group.classList.add(statusClass(departmentUnits[0]?.status));
+    group.append(heading, subtitle);
+    elements["spotter-unit-grid"].append(group);
   });
   elements["spotter-table"].replaceChildren();
   const rows = Object.entries(departments).filter(([, record]) => record.activatedAt || record.deactivatedAt).slice(0, 5);

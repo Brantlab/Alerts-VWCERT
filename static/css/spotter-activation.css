@@ -34,6 +34,11 @@ button:disabled { opacity: .65; cursor: wait; }
 .active-units h2 { margin: 0 0 .75rem; color: var(--navy); font-size: 1.1rem; }
 .unit-list { display: grid; gap: .55rem; }
 .unit-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .75rem; padding: .7rem .8rem; background: #f4f7f8; border-left: 5px solid var(--teal); border-radius: 8px; }
+.unit-card.status-available { background: #eef8f3; border-left-color: var(--green); }
+.unit-card.status-monitoring { background: #fff8d7; border-left-color: #d8bd52; }
+.unit-card.status-en-route { background: #e8f2ff; border-left-color: #4c86c6; }
+.unit-card.status-on-scene { background: #fde8eb; border-left-color: var(--red); }
+.unit-card.status-unavailable { background: #eef1f3; border-left-color: #8b98a0; }
 .unit-card strong { display: block; color: var(--navy); }
 .unit-card span { display: block; margin-top: .2rem; color: var(--muted); font-size: .9rem; font-weight: 750; }
 .unit-card .secondary-button { min-width: 70px; min-height: 36px; }
