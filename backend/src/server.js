@@ -244,6 +244,25 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/spotter/unit" && request.method === "DELETE") {
+    const id = cleanText(url.searchParams.get("id"), 80);
+    const state = await readJsonFile(stateFile, {});
+    if (!id || !state.activeIncident?.spotterActivation?.units?.[id]) {
+      jsonResponse(response, 404, { error: "Unit check-in not found" }, headers);
+      return;
+    }
+    delete state.activeIncident.spotterActivation.units[id];
+    state.reason = "spotter-unit-remove";
+    state.updatedBy = clientIp(request);
+    state.updatedAt = new Date().toISOString();
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+    jsonResponse(response, 200, { state }, headers);
+    broadcast("state", state);
+    broadcastPresence();
+    return;
+  }
+
   if (url.pathname === "/api/events" && request.method === "GET") {
     const requestedId = cleanClientName(url.searchParams.get("clientId"));
     const id = requestedId || randomUUID();

@@ -19,17 +19,25 @@ body { margin: 0; color: var(--ink); background: var(--paper); }
 .eyebrow { margin: 0 0 .3rem; color: var(--teal); font-size: .75rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 h1 { margin: 0; color: var(--navy); font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .incident-status { margin: .65rem 0 1.2rem; color: var(--muted); font-weight: 750; }
-form { display: grid; gap: .85rem; }
+form { display: grid; grid-template-columns: 1fr 1.2fr .8fr auto; align-items: end; gap: .85rem; }
 label { display: grid; gap: .3rem; color: var(--navy); font-size: .85rem; font-weight: 850; }
 input, select { min-height: 44px; padding: .55rem .7rem; color: var(--ink); background: white; border: 1px solid #b7c7ce; border-radius: 8px; font: inherit; font-weight: 750; }
-button { min-height: 48px; margin-top: .4rem; color: white; background: var(--teal); border: 0; border-radius: 9px; font: inherit; font-weight: 900; cursor: pointer; }
+.department-picker { margin: 1rem 0 .85rem; }
+button { min-height: 44px; color: white; background: var(--teal); border: 0; border-radius: 9px; font: inherit; font-weight: 900; cursor: pointer; }
 button:disabled { opacity: .65; cursor: wait; }
+.secondary-button { color: var(--navy); background: white; border: 1px solid #b7c7ce; }
+.danger-button { background: var(--red); }
 .save-status { margin: 1rem 0 0; color: var(--muted); font-weight: 750; }
 .save-status.ok { color: var(--green); }
 .save-status.error { color: var(--red); }
 .active-units { margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .active-units h2 { margin: 0 0 .75rem; color: var(--navy); font-size: 1.1rem; }
-.unit-list { display: grid; gap: .55rem; }
+.unit-list, .managed-unit-list { display: grid; gap: .55rem; }
 .unit-card { padding: .7rem .8rem; background: #f4f7f8; border-left: 5px solid var(--teal); border-radius: 8px; }
 .unit-card strong { display: block; color: var(--navy); }
 .unit-card span { display: block; margin-top: .2rem; color: var(--muted); font-size: .9rem; font-weight: 750; }
+.managed-unit-card { display: grid; grid-template-columns: 1fr 1.3fr .85fr auto auto; align-items: end; gap: .55rem; padding: .75rem; background: #f4f7f8; border: 1px solid var(--line); border-left: 5px solid var(--teal); border-radius: 8px; }
+
+@media (max-width: 760px) {
+  form, .managed-unit-card { grid-template-columns: 1fr; }
+}

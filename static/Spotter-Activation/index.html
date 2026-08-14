@@ -14,22 +14,23 @@
       <h1>Spotter Activation</h1>
       <p id="incident-status" class="incident-status">Checking active incident...</p>
 
+      <label class="department-picker">
+        Department
+        <select id="department" required>
+          <option value="">Select department</option>
+          <option>Convoy</option>
+          <option>Willshire</option>
+          <option>Wren</option>
+          <option>Ohio City</option>
+          <option>Middle Point</option>
+          <option>Scott</option>
+          <option>Van Wert</option>
+          <option>CERT</option>
+          <option>Amateur</option>
+        </select>
+      </label>
+
       <form id="spotter-form">
-        <label>
-          Department
-          <select id="department" required>
-            <option value="">Select department</option>
-            <option>Convoy</option>
-            <option>Willshire</option>
-            <option>Wren</option>
-            <option>Ohio City</option>
-            <option>Middle Point</option>
-            <option>Scott</option>
-            <option>Van Wert</option>
-            <option>CERT</option>
-            <option>Amateur</option>
-          </select>
-        </label>
         <label>
           Unit number
           <input id="unit-number" type="text" autocomplete="off" placeholder="Example: 101, Engine 2, CERT 4" required>
@@ -48,12 +49,16 @@
             <option>Unavailable</option>
           </select>
         </label>
-        <button id="submit-button" type="submit">Send Check-In</button>
+        <button id="submit-button" type="submit">Add Unit</button>
       </form>
 
-      <p id="save-status" class="save-status" role="status">Enter your unit information, then send check-in.</p>
+      <p id="save-status" class="save-status" role="status">Select your department, then add each responding unit.</p>
       <section class="active-units">
-        <h2>Checked-In Units</h2>
+        <h2>Your Department Units</h2>
+        <div id="managed-unit-list" class="managed-unit-list"></div>
+      </section>
+      <section class="active-units">
+        <h2>All Checked-In Units</h2>
         <div id="unit-list" class="unit-list"></div>
       </section>
     </section>
