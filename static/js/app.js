@@ -1013,9 +1013,17 @@ function setConnectedClients(clients = []) {
   const element = elements["connected-clients"];
   if (!element) return;
   const ips = [...new Set(clients.map((client) => client.ip).filter(Boolean))];
-  element.textContent = ips.length
-    ? `Connected: ${ips.length} (${ips.join(", ")})`
+  element.textContent = clients.length
+    ? `Connected: ${clients.length}${ips.length ? ` (${ips.join(", ")})` : ""}`
     : "Connected: —";
+}
+
+function setSharedStatus(status, detail = "") {
+  const element = elements["shared-status"];
+  if (!element) return;
+  element.classList.remove("synced", "error");
+  if (status) element.classList.add(status);
+  element.textContent = `Shared: ${detail || status || "idle"}`;
 }
 
 function backendHeaders() {
@@ -1054,6 +1062,7 @@ function sharedStateSnapshot(reason = "update") {
 function publishSharedState(reason = "update") {
   if (sharedStateApplying) return;
   clearTimeout(sharedStatePublishTimer);
+  setSharedStatus("", "saving");
   sharedStatePublishTimer = setTimeout(async () => {
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/state/current`, {
@@ -1065,17 +1074,34 @@ function publishSharedState(reason = "update") {
         const state = await response.json();
         sharedStateLastUpdatedAt = state.updatedAt || sharedStateLastUpdatedAt;
         setBackendStatus("connected");
+        setSharedStatus("synced", "synced");
       } else {
         setBackendStatus("disconnected");
+        setSharedStatus("error", `save failed ${response.status}`);
       }
     } catch {
       setBackendStatus("disconnected");
+      setSharedStatus("error", "save failed");
     }
   }, 450);
 }
 
-function operatorIsTyping() {
-  return ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement?.tagName);
+async function pollSharedState() {
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/api/state/current`, { cache: "no-store" });
+    if (!response.ok) return;
+    await applySharedState(await response.json());
+  } catch {
+    // The backend status check already owns visible connection errors.
+  }
+}
+
+function operatorIsEditingText() {
+  const element = document.activeElement;
+  if (!element) return false;
+  if (element.tagName === "TEXTAREA") return true;
+  if (element.tagName !== "INPUT") return false;
+  return !["checkbox", "radio", "button", "submit", "reset"].includes(element.type);
 }
 
 function matchingAlertForSharedState(state) {
@@ -1088,7 +1114,7 @@ function matchingAlertForSharedState(state) {
 function applySharedMessageDrafts(state) {
   const drafts = state?.messageDrafts;
   const alertRecord = currentAlertRecord();
-  if (!drafts || !alertRecord || drafts.alertKey !== selectedAlertKey || operatorIsTyping()) return;
+  if (!drafts || !alertRecord || drafts.alertKey !== selectedAlertKey || operatorIsEditingText()) return;
   alertRecord.message = drafts.radio;
   alertRecord.nixleMessage = drafts.nixle;
   alertRecord.facebookMessage = drafts.facebook;
@@ -1103,7 +1129,6 @@ function applySharedMessageDrafts(state) {
 async function applySharedState(state) {
   if (!state?.updatedAt || state.updatedAt === sharedStateLastUpdatedAt || sharedStateApplying) return;
   sharedStateLastUpdatedAt = state.updatedAt;
-  if (operatorIsTyping()) return;
   sharedStateApplying = true;
   try {
     const sharedCounty = state.activeCounty;
@@ -1116,10 +1141,12 @@ async function applySharedState(state) {
       updateCountySelectAlertClass();
       resetWorkspaceForCountyChange();
       await fetchAlerts();
+      elements["county-select"].value = selectedCounty.code;
     }
     const alert = matchingAlertForSharedState(state);
     if (alert && selectedAlertKey !== state.selectedAlertKey) selectAlert(alert, Boolean(alert.isTraining));
     applySharedMessageDrafts(state);
+    setSharedStatus("synced", "received");
   } finally {
     sharedStateApplying = false;
   }
@@ -3796,6 +3823,7 @@ renderAlertSoundControl();
 elements["show-spc-md"].checked = localStorage.getItem(SHOW_SPC_MD_KEY) !== "false";
 checkBackendStatus();
 setInterval(checkBackendStatus, 60_000);
+setInterval(pollSharedState, 8_000);
 document.addEventListener("pointerdown", () => {
   if (alertSoundEnabled) getAlertAudioContext()?.resume();
 }, { once: true });
@@ -3804,6 +3832,9 @@ updateCountyLabels();
 loadAlertCountyOptions().finally(() => {
   elements["county-select"].value = selectedCounty.code;
   updateCountyLabels();
-  fetchAlerts().finally(connectBackendEvents);
+  fetchAlerts().finally(() => {
+    connectBackendEvents();
+    pollSharedState();
+  });
   setInterval(() => fetchAlerts({ quiet: true }), POLL_INTERVAL);
 });
