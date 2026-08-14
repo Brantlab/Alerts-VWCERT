@@ -590,6 +590,7 @@ function spotterActivation(incident = selectedIncident) {
   incident.spotterActivation ||= { initialized: false, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] };
   incident.spotterActivation.departments ||= {};
   incident.spotterActivation.reports ||= [];
+  incident.spotterActivation.units ||= {};
   return incident.spotterActivation;
 }
 
@@ -2741,6 +2742,28 @@ function renderSpotterActivation() {
       row.append(cell);
     });
     departmentList.append(row);
+  });
+
+  const unitList = elements["spotter-unit-list"];
+  unitList.replaceChildren();
+  const units = Object.values(spotter.units || {}).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  if (!units.length) {
+    const row = document.createElement("tr");
+    const cell = makeElement("td", "empty-table", "No department units have checked in from the spotter page.");
+    cell.colSpan = 5;
+    row.append(cell);
+    unitList.append(row);
+  }
+  units.forEach((unit) => {
+    const row = document.createElement("tr");
+    row.append(
+      makeElement("td", "", unit.department || "—"),
+      makeElement("td", "", unit.unitNumber || "—"),
+      makeElement("td", "", unit.location || "—"),
+      makeElement("td", "", unit.status || "Available"),
+      makeElement("td", "", formatTime(unit.updatedAt)),
+    );
+    unitList.append(row);
   });
 
   const reportList = elements["spotter-report-list"];

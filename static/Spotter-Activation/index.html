@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12344b">
+  <title>Spotter Activation Check-In</title>
+  <link rel="stylesheet" href="../css/spotter-activation.css">
+</head>
+<body>
+  <main class="spotter-shell">
+    <section class="spotter-card">
+      <p class="eyebrow">Van Wert County EMA</p>
+      <h1>Spotter Activation</h1>
+      <p id="incident-status" class="incident-status">Checking active incident...</p>
+
+      <form id="spotter-form">
+        <label>
+          Department
+          <select id="department" required>
+            <option value="">Select department</option>
+            <option>Convoy</option>
+            <option>Willshire</option>
+            <option>Wren</option>
+            <option>Ohio City</option>
+            <option>Middle Point</option>
+            <option>Scott</option>
+            <option>Van Wert</option>
+            <option>CERT</option>
+            <option>Amateur</option>
+          </select>
+        </label>
+        <label>
+          Unit number
+          <input id="unit-number" type="text" autocomplete="off" placeholder="Example: 101, Engine 2, CERT 4" required>
+        </label>
+        <label>
+          Current location
+          <input id="location" type="text" autocomplete="off" placeholder="Road/intersection, station, or assignment">
+        </label>
+        <label>
+          Status
+          <select id="status">
+            <option>Available</option>
+            <option>Monitoring</option>
+            <option>En route</option>
+            <option>On scene</option>
+            <option>Unavailable</option>
+          </select>
+        </label>
+        <button id="submit-button" type="submit">Send Check-In</button>
+      </form>
+
+      <p id="save-status" class="save-status" role="status">Enter your unit information, then send check-in.</p>
+      <section class="active-units">
+        <h2>Checked-In Units</h2>
+        <div id="unit-list" class="unit-list"></div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="../js/spotter-activation.js"></script>
+</body>
+</html>

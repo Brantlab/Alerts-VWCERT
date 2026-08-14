@@ -61,6 +61,10 @@ function cleanClientName(value) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, 48);
 }
 
+function cleanText(value, limit = 120) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
 function connectedClients() {
   const cutoff = Date.now() - presenceTimeout;
   return [...eventClients.values()]
@@ -201,6 +205,42 @@ async function handleRequest(request, response) {
       broadcastPresence();
     }
     jsonResponse(response, 200, { clients: connectedClients() }, headers);
+    return;
+  }
+
+  if (url.pathname === "/api/spotter/unit" && request.method === "PUT") {
+    const body = await readRequestJson(request);
+    const state = await readJsonFile(stateFile, {});
+    if (!state.activeIncident || state.activeIncident.closedAt) {
+      jsonResponse(response, 409, { error: "No open shared incident" }, headers);
+      return;
+    }
+    const spotter = state.activeIncident.spotterActivation ||= { initialized: true, severeThunderstorm: false, tornado: false, nwsProduct: "", departments: {}, reports: [] };
+    spotter.units ||= {};
+    const id = cleanText(body.id, 80) || randomUUID();
+    const unit = {
+      id,
+      department: cleanText(body.department, 80),
+      unitNumber: cleanText(body.unitNumber, 80),
+      location: cleanText(body.location, 160),
+      status: cleanText(body.status, 80) || "Available",
+      updatedAt: new Date().toISOString(),
+      updatedBy: clientIp(request),
+    };
+    if (!unit.department || !unit.unitNumber) {
+      jsonResponse(response, 400, { error: "Department and unit number are required" }, headers);
+      return;
+    }
+    spotter.initialized = true;
+    spotter.units[id] = unit;
+    state.reason = "spotter-unit-update";
+    state.updatedBy = clientIp(request);
+    state.updatedAt = unit.updatedAt;
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+    jsonResponse(response, 200, { unit, state }, headers);
+    broadcast("state", state);
+    broadcastPresence();
     return;
   }
 

@@ -32,7 +32,17 @@ The read-only EOC wall display is available at:
 /EOC-Display/
 ```
 
-It is designed for a 1920x1080 display and listens to the backend shared-state stream. It shows the selected county/alert, radio message, latest activity logs, tornado siren status, spotter activation, office staffing, incident notes, backend status, and connected clients. The page identifies itself to presence as `EOC Display`.
+It is designed for a 1920x1080 display and listens to the backend shared-state stream. It shows the selected county/alert, radio message, latest activity logs, tornado siren status, spotter activation and unit check-ins, office staffing, incident notes, backend status, and connected clients. The page identifies itself to presence as `EOC Display`.
+
+## Spotter activation page
+
+Departments can check in from:
+
+```txt
+/Spotter-Activation/
+```
+
+They select a department, enter a unit number, location, and status. Check-ins are saved to the backend shared incident state and appear in the main portal's spotter activation panel and on the EOC display. An open shared incident is required before units can submit.
 
 ## VPS backend
 
@@ -97,6 +107,7 @@ Current backend endpoints:
 - `PUT /api/state/current` saves shared dashboard state JSON. If `ADMIN_TOKEN` is set, send `Authorization: Bearer <token>`.
 - `GET /api/presence` returns connected live clients.
 - `PUT /api/presence/client` updates the connected browser's display name.
+- `PUT /api/spotter/unit` saves a department unit check-in to the open shared incident.
 - `GET /api/events` streams shared state and connected-client updates with Server-Sent Events.
 
 Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.

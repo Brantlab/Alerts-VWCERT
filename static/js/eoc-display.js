@@ -1,5 +1,5 @@
 const API_BASE_URL = window.VWCERT_API_URL || "https://api.vwcert.org";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
 const clientId = sessionStorage.getItem("vwcert-eoc-client-id") || `eoc-${crypto.randomUUID()}`;
 sessionStorage.setItem("vwcert-eoc-client-id", clientId);
@@ -116,12 +116,30 @@ function renderSirens(incident) {
 function renderSpotter(incident) {
   const spotter = incident?.spotterActivation;
   const departments = spotter?.departments || {};
+  const units = Object.values(spotter?.units || {}).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
   const activeDepartments = Object.entries(departments).filter(([, record]) => record.activatedAt && !record.deactivatedAt);
   elements["spotter-summary"].textContent = spotter?.initialized
-    ? `${spotter.nwsProduct || "Product pending"} - ${activeDepartments.length} active department${activeDepartments.length === 1 ? "" : "s"} - ${spotter.reports?.length || 0} report${spotter.reports?.length === 1 ? "" : "s"}`
+    ? `${spotter.nwsProduct || "Product pending"} - ${units.length} unit${units.length === 1 ? "" : "s"} - ${activeDepartments.length} active dept${activeDepartments.length === 1 ? "" : "s"}`
     : "No spotter activation recorded.";
+  elements["spotter-unit-grid"].replaceChildren();
+  if (!units.length) {
+    const empty = document.createElement("div");
+    empty.className = "unit-pill";
+    empty.textContent = "No unit check-ins.";
+    elements["spotter-unit-grid"].append(empty);
+  }
+  units.slice(0, 6).forEach((unit) => {
+    const card = document.createElement("div");
+    card.className = "unit-pill";
+    const heading = document.createElement("strong");
+    heading.textContent = `${unit.department || "Dept"} - ${unit.unitNumber || "Unit"}`;
+    const detail = document.createElement("span");
+    detail.textContent = `${unit.status || "Available"} - ${unit.location || "No location"}`;
+    card.append(heading, detail);
+    elements["spotter-unit-grid"].append(card);
+  });
   elements["spotter-table"].replaceChildren();
-  const rows = Object.entries(departments).filter(([, record]) => record.activatedAt || record.deactivatedAt).slice(0, 8);
+  const rows = Object.entries(departments).filter(([, record]) => record.activatedAt || record.deactivatedAt).slice(0, 5);
   if (!rows.length) {
     const row = document.createElement("tr");
     row.innerHTML = `<td colspan="3">No departments logged.</td>`;
