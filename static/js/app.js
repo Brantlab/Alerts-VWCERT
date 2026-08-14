@@ -540,7 +540,7 @@ function saveIncidents(records) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
 }
 
-function persistIncident() {
+function persistIncident({ publish = true, reason = "incident-update" } = {}) {
   if (!selectedIncident) return;
   selectedIncident.updatedAt = new Date().toISOString();
   const records = loadIncidents();
@@ -548,6 +548,7 @@ function persistIncident() {
   saveIncidents(records);
   if (!selectedIncident.closedAt) localStorage.setItem(ACTIVE_INCIDENT_KEY, selectedIncident.seriesId);
   renderHistory();
+  if (publish) publishSharedState(reason);
 }
 
 function createIncident(isTraining = false) {
@@ -1032,11 +1033,26 @@ function backendHeaders() {
   return headers;
 }
 
+function jsonClone(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
+function visibleWorkspaceState() {
+  return {
+    workspace: !elements.workspace.classList.contains("hidden"),
+    channels: !elements["channel-section"].classList.contains("hidden"),
+    tornadoOperations: !elements["tornado-operations"].classList.contains("hidden"),
+    spotter: !elements["spotter-panel"].classList.contains("hidden"),
+    staffing: !elements["staffing-section"].classList.contains("hidden"),
+  };
+}
+
 function sharedStateSnapshot(reason = "update") {
   const alertRecord = currentAlertRecord();
   return {
     reason,
     activeCounty: { ...selectedCounty },
+    activeAlerts: jsonClone(activeAlerts),
     selectedAlertKey,
     selectedAlertId: selectedAlert?.id || selectedAlert?.["@id"] || "",
     selectedEvent: selectedAlert?.event || "",
@@ -1050,12 +1066,14 @@ function sharedStateSnapshot(reason = "update") {
       operator: selectedIncident.operator || "",
       notes: selectedIncident.notes || "",
     } : null,
+    activeIncident: jsonClone(selectedIncident),
     messageDrafts: alertRecord && selectedAlertKey ? {
       alertKey: selectedAlertKey,
       radio: alertRecord.message || "",
       nixle: alertRecord.nixleMessage || "",
       facebook: alertRecord.facebookMessage || "",
     } : null,
+    visible: visibleWorkspaceState(),
   };
 }
 
@@ -1126,11 +1144,60 @@ function applySharedMessageDrafts(state) {
   persistIncident();
 }
 
+function renderSharedWorkspaceVisibility(visible = {}) {
+  if (!selectedIncident) return;
+  setIncidentControls(!selectedIncident.closedAt);
+  elements["operator-name"].value = selectedIncident.operator || "";
+  elements["incident-notes"].value = selectedIncident.notes || "";
+  elements["incident-opened"].textContent = formatDateTime(selectedIncident.openedAt);
+  elements["series-id"].textContent = selectedIncident.seriesId;
+  const alertCount = Object.keys(selectedIncident.alerts || {}).length;
+  elements["incident-alert-count"].textContent = `${alertCount} alert${alertCount === 1 ? "" : "s"} included in this incident`;
+  elements.workspace.classList.toggle("hidden", !visible.workspace && !selectedAlert);
+  elements["channel-section"].classList.toggle("hidden", !visible.channels && !selectedAlert);
+  elements["spotter-panel"].classList.toggle("hidden", !visible.spotter);
+  elements["staffing-section"].classList.toggle("hidden", !visible.staffing);
+  if (visible.spotter) renderSpotterActivation();
+  if (visible.staffing) renderStaff();
+  if (visible.channels || selectedAlert) renderChannels();
+  if (selectedAlert) renderTornadoOperations();
+  updateFloatingSirenStatus(selectedIsActiveTornadoWarning() ? tornadoOperations() : null);
+}
+
+function persistSharedIncidentLocally() {
+  if (!selectedIncident) return;
+  const records = loadIncidents();
+  records[selectedIncident.seriesId] = selectedIncident;
+  saveIncidents(records);
+  if (!selectedIncident.closedAt) {
+    localStorage.setItem(ACTIVE_INCIDENT_KEY, selectedIncident.seriesId);
+  } else {
+    localStorage.removeItem(ACTIVE_INCIDENT_KEY);
+  }
+  renderHistory();
+}
+
 async function applySharedState(state) {
   if (!state?.updatedAt || state.updatedAt === sharedStateLastUpdatedAt || sharedStateApplying) return;
   sharedStateLastUpdatedAt = state.updatedAt;
   sharedStateApplying = true;
   try {
+    if (Array.isArray(state.activeAlerts)) {
+      activeAlerts = jsonClone(state.activeAlerts);
+      renderAlerts();
+    }
+    if (Object.prototype.hasOwnProperty.call(state, "activeIncident") && state.activeIncident === null) {
+      selectedIncident = null;
+      selectedAlert = null;
+      selectedAlertKey = null;
+      localStorage.removeItem(ACTIVE_INCIDENT_KEY);
+      setIncidentControls(false);
+      resetWorkspaceForCountyChange();
+    } else if (state.activeIncident) {
+      selectedIncident = jsonClone(state.activeIncident);
+      persistSharedIncidentLocally();
+      setIncidentControls(!selectedIncident.closedAt);
+    }
     const sharedCounty = state.activeCounty;
     if (sharedCounty?.code && sharedCounty.code !== selectedCounty.code) {
       selectedCounty = { code: sharedCounty.code, name: sharedCounty.name || sharedCounty.code };
@@ -1146,6 +1213,7 @@ async function applySharedState(state) {
     const alert = matchingAlertForSharedState(state);
     if (alert && selectedAlertKey !== state.selectedAlertKey) selectAlert(alert, Boolean(alert.isTraining));
     applySharedMessageDrafts(state);
+    renderSharedWorkspaceVisibility(state.visible);
     setSharedStatus("synced", "received");
   } finally {
     sharedStateApplying = false;
@@ -2169,7 +2237,7 @@ async function fetchAlerts({ quiet = false } = {}) {
     announceNewAlerts(activeAlerts);
     if (selectedIncident && !selectedIncident.isTraining) {
       activeAlerts.filter((alert) => SUPPORTED_EVENTS.includes(alert.event)).forEach((alert) => addAlertToIncident(alert, false));
-      persistIncident();
+      persistIncident({ publish: false });
     }
     setFeedState("live", `Last checked ${formatTime(new Date().toISOString())} · ${currentCountyName()}`);
     elements["feed-error"].classList.add("hidden");
@@ -2610,6 +2678,7 @@ function setSpotterExpanded(expanded) {
   const description = elements["spotter-activation-button"].querySelector("small");
   if (description) description.textContent = expanded ? "Close activation and reports log" : "Open activation and reports log";
   if (expanded) requestAnimationFrame(() => elements["spotter-panel"].scrollIntoView({ behavior: "smooth", block: "start" }));
+  publishSharedState(expanded ? "open-spotter" : "close-spotter");
 }
 
 function spotterTimeControl(record, field) {
@@ -2740,6 +2809,7 @@ function setStaffingExpanded(expanded) {
   const description = elements["office-staffing-button"].querySelector("small");
   if (description) description.textContent = expanded ? "Close staff and time log" : "Open staff and time log";
   if (expanded) requestAnimationFrame(() => elements["staffing-section"].scrollIntoView({ behavior: "smooth", block: "start" }));
+  publishSharedState(expanded ? "open-staffing" : "close-staffing");
 }
 
 function toggleStaffing() {

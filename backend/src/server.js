@@ -110,7 +110,7 @@ async function readRequestJson(request) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 1_000_000) throw new Error("Request body is too large");
+    if (size > 5_000_000) throw new Error("Request body is too large");
     chunks.push(chunk);
   }
   const text = Buffer.concat(chunks).toString("utf8");
