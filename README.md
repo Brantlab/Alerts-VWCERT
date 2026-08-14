@@ -44,6 +44,32 @@ Departments can check in from:
 
 They select a department, then add one or more unit numbers with locations and statuses. Units can be updated or removed by that department page, and each checked-in unit can send a spotter report with its observed location and report text. Check-ins and reports are saved to the backend shared incident state and appear in the main portal's spotter activation panel and on the EOC display. An open shared incident is required before units can submit.
 
+## Community calendar
+
+The standalone calendar frontend lives in `calendar/` and is served by the backend at the root of `calendar.vwcert.org`. For local testing it is also available at:
+
+```txt
+http://127.0.0.1:8080/calendar/
+```
+
+Calendar routes:
+
+- `/` is the public approved-events calendar with 12-month, month, week, today, and list views.
+- `/panel` is the expandable staff approval and event-management panel.
+- `/eoc` is a read-only spreadsheet-style display covering the previous and next 24 hours.
+- `https://api.vwcert.org/api/calendar/events.ics` is the calendar subscription feed.
+
+The public intake form collects event name, address, start/end, POC name, POC phone, and notes. New submissions remain pending until a staff member approves them. The panel can adjust submitted details before approval, reject submissions, edit published events, and remove events.
+
+Calendar approval requires `CALENDAR_ADMIN_TOKEN` on the backend. Staff enter that token in the panel; it remains in browser session storage only and is cleared when the panel is locked or the browser session ends. Use a long random value. This is deliberately separate from `ADMIN_TOKEN` so calendar security does not interrupt the alert desk's shared-state writes.
+
+To publish the subdomain, point both Cloudflare Tunnel public hostnames at the backend:
+
+```txt
+calendar.vwcert.org -> http://127.0.0.1:8080
+api.vwcert.org      -> http://127.0.0.1:8080
+```
+
 ## VPS backend
 
 The repo includes a small Dockerized backend scaffold for the shared API work. The frontend can remain on GitHub Pages while the backend runs on a VPS behind Cloudflare Tunnel.
@@ -92,12 +118,14 @@ Important `.env` values:
 
 ```env
 BACKEND_PORT=8080
-PUBLIC_FRONTEND_ORIGIN=https://alerts.vwcert.org
+PUBLIC_FRONTEND_ORIGIN=https://alerts.vwcert.org,https://calendar.vwcert.org
+CALENDAR_PUBLIC_HOSTS=calendar.vwcert.org
 ADMIN_TOKEN=
+CALENDAR_ADMIN_TOKEN=replace-with-a-long-random-secret
 PRESENCE_TIMEOUT_MS=45000
 ```
 
-Leave `ADMIN_TOKEN` blank for browser shared-state writes. If the API is public, protect `api.vwcert.org` with Cloudflare Access before using shared operational state.
+Calendar approvals are disabled when `CALENDAR_ADMIN_TOKEN` is blank. Public calendar intake, approved events, and ICS endpoints intentionally remain reachable without authentication.
 
 Current backend endpoints:
 
@@ -111,6 +139,13 @@ Current backend endpoints:
 - `DELETE /api/spotter/unit?id=...` removes a department unit check-in.
 - `PUT /api/spotter/report` saves a unit spotter report to the open shared incident.
 - `GET /api/events` streams shared state and connected-client updates with Server-Sent Events.
+- `GET /api/calendar/events` returns approved events, optionally filtered with `from` and `to` ISO timestamps.
+- `GET /api/calendar/events.ics` returns the approved-event ICS subscription.
+- `POST /api/calendar/submissions` accepts a public event for review.
+- `GET /api/calendar/admin` returns submissions and approved events with an admin bearer token.
+- `PATCH /api/calendar/submissions/:id` approves or rejects a submission with an admin bearer token.
+- `PUT /api/calendar/events/:id` edits an approved event with an admin bearer token.
+- `DELETE /api/calendar/events/:id` removes an approved event with an admin bearer token.
 
 Persistent backend data and cache files live in Docker volumes named `backend-data` and `backend-cache`.
 

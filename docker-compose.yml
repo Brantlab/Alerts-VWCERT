@@ -1,7 +1,8 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: vwcert-alerts-backend
     restart: unless-stopped
     environment:
@@ -10,7 +11,9 @@ services:
       CACHE_DIR: /cache
       PUBLIC_FRONTEND_ORIGIN: ${PUBLIC_FRONTEND_ORIGIN:-http://localhost:1313}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CALENDAR_ADMIN_TOKEN: ${CALENDAR_ADMIN_TOKEN:-}
       PRESENCE_TIMEOUT_MS: ${PRESENCE_TIMEOUT_MS:-45000}
+      CALENDAR_PUBLIC_HOSTS: ${CALENDAR_PUBLIC_HOSTS:-calendar.vwcert.org}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     volumes:

@@ -5,7 +5,7 @@ APP_DIR="${APP_DIR:-$HOME/Alerts-VWCERT}"
 REPO_URL="${REPO_URL:-}"
 BRANCH="${BRANCH:-main}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-backend}"
-SPARSE_PATHS=(backend docker-compose.yml .env.example README.md .gitignore)
+SPARSE_PATHS=(backend calendar docker-compose.yml .env.example README.md .gitignore)
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required." >&2
