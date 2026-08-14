@@ -3974,6 +3974,19 @@ window.addEventListener("afterprint", () => document.body.classList.remove("repo
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {
   button.addEventListener("click", () => elements[button.dataset.closeDialog].close());
 });
+const linksMenu = document.querySelector(".links-menu");
+linksMenu?.querySelectorAll("a").forEach((link) => {
+  link.addEventListener("click", () => linksMenu.removeAttribute("open"));
+});
+document.addEventListener("click", (event) => {
+  if (linksMenu?.open && !linksMenu.contains(event.target)) linksMenu.removeAttribute("open");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && linksMenu?.open) {
+    linksMenu.removeAttribute("open");
+    linksMenu.querySelector("summary")?.focus();
+  }
+});
 elements["export-records"].addEventListener("click", exportRecords);
 
 window.addEventListener("beforeinstallprompt", (event) => {

@@ -42,6 +42,16 @@ button:disabled { cursor: wait; opacity: .6; }
 .site-header .eyebrow { color: #aad4dc; }
 .site-header h1 { margin: 0; font-size: clamp(1.3rem, 3vw, 1.8rem); letter-spacing: -.02em; }
 .header-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-left: auto; }
+.links-menu { position: relative; }
+.links-menu summary { list-style: none; }
+.links-menu summary::-webkit-details-marker { display: none; }
+.links-menu summary::after { margin-left: .5rem; content: "▾"; font-size: .72rem; transition: transform .15s ease; }
+.links-menu[open] summary::after { transform: rotate(180deg); }
+.links-menu-panel { position: absolute; top: calc(100% + .45rem); right: 0; z-index: 50; display: grid; width: min(330px, calc(100vw - 2rem)); padding: .45rem; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 45px rgba(5, 26, 39, .24); }
+.links-menu-panel a { display: grid; gap: .1rem; padding: .65rem .75rem; color: var(--navy); border-radius: 8px; text-decoration: none; }
+.links-menu-panel a:hover, .links-menu-panel a:focus-visible { background: var(--teal-soft); outline: none; box-shadow: none; }
+.links-menu-panel strong { font-size: .86rem; }
+.links-menu-panel span { color: var(--muted); font-size: .72rem; }
 
 .app-shell { width: min(1180px, calc(100% - 2rem)); margin: 1.25rem auto 3rem; }
 .panel { padding: clamp(1.1rem, 3vw, 1.65rem); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -431,6 +441,9 @@ footer p { margin: .3rem; }
   .brand-mark { width: 44px; height: 44px; flex-basis: 44px; }
   .header-actions { width: 100%; margin-left: 0; }
   .header-actions .button { flex: 1; }
+  .links-menu { flex: 1; }
+  .links-menu summary { width: 100%; }
+  .links-menu-panel { right: auto; left: 0; }
   .app-shell { width: min(100% - 1rem, 1180px); margin-top: .5rem; }
   .status-strip { grid-template-columns: 1fr; align-items: stretch; gap: .85rem; }
   .section-heading { align-items: stretch; flex-direction: column; }
