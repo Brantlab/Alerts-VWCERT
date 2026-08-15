@@ -1,14 +1,17 @@
 const API_BASE_URL = window.VWCERT_API_URL || "https://api.vwcert.org";
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 const SIRENS = ["Wren", "Willshire", "Convoy", "Dixon", "Ohio City", "Van Wert City", "Scott", "Middle Point", "Venedocia"];
-const CALENDAR_WINDOW_MS = 24 * 60 * 60_000;
-const CALENDAR_CARD_LIMIT = 6;
+const CALENDAR_PAST_WINDOW_MS = 6 * 60 * 60_000;
+const CALENDAR_FUTURE_WINDOW_MS = 24 * 60 * 60_000;
+const CALENDAR_CARD_LIMIT = 5;
 const clientId = sessionStorage.getItem("vwcert-eoc-client-id") || `eoc-${crypto.randomUUID()}`;
 sessionStorage.setItem("vwcert-eoc-client-id", clientId);
 
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 let latestState = null;
 let events = null;
+let mapRenderId = 0;
+const countyGeometryCache = new Map();
 
 function formatDateTime(value) {
   if (!value) return "--";
@@ -66,9 +69,105 @@ function currentAlert(state) {
   });
 }
 
-function messageFor(state, alert) {
-  if (state?.messageDrafts?.radio) return state.messageDrafts.radio;
-  return alert?.message || alert?.generatedMessage || "No radio message selected.";
+function selectedAlertGeometry(state) {
+  const alerts = state?.activeAlerts || [];
+  return alerts.find((alert) => alert.id === state.selectedAlertId || alert["@id"] === state.selectedAlertId)
+    || alerts.find((alert) => alert.id === state.selectedAlertKey || alert["@id"] === state.selectedAlertKey)
+    || alerts.find((alert) => alert.event === state.selectedEvent)
+    || null;
+}
+
+function geometryRings(geometry) {
+  if (!geometry?.coordinates) return [];
+  if (geometry.type === "Polygon") return geometry.coordinates;
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.flat();
+  return [];
+}
+
+function geometryBounds(...geometries) {
+  const points = geometries.flatMap((geometry) => geometryRings(geometry).flat());
+  if (!points.length) return null;
+  const longitudes = points.map(([longitude]) => longitude);
+  const latitudes = points.map(([, latitude]) => latitude);
+  return {
+    minLongitude: Math.min(...longitudes),
+    maxLongitude: Math.max(...longitudes),
+    minLatitude: Math.min(...latitudes),
+    maxLatitude: Math.max(...latitudes),
+  };
+}
+
+function geometryPath(geometry, project) {
+  return geometryRings(geometry).map((ring) => ring.map(([longitude, latitude], index) => {
+    const [x, y] = project(longitude, latitude);
+    return `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ") + " Z").join(" ");
+}
+
+async function countyGeometry(code) {
+  if (!code) return null;
+  if (countyGeometryCache.has(code)) return countyGeometryCache.get(code);
+  const response = await fetch(`https://api.weather.gov/zones/county/${encodeURIComponent(code)}`, {
+    headers: { Accept: "application/geo+json" },
+    cache: "force-cache",
+  });
+  if (!response.ok) throw new Error(String(response.status));
+  const geometry = (await response.json()).geometry;
+  countyGeometryCache.set(code, geometry);
+  return geometry;
+}
+
+function drawAlertMap(county, polygon, event) {
+  const bounds = geometryBounds(county) || geometryBounds(polygon);
+  if (!bounds) {
+    elements["county-map-path"].setAttribute("d", "");
+    elements["alert-map-path"].setAttribute("d", "");
+    return false;
+  }
+  const width = Math.max(bounds.maxLongitude - bounds.minLongitude, .001);
+  const height = Math.max(bounds.maxLatitude - bounds.minLatitude, .001);
+  const padding = 30;
+  const scale = Math.min((600 - padding * 2) / width, (420 - padding * 2) / height);
+  const drawnWidth = width * scale;
+  const drawnHeight = height * scale;
+  const offsetX = (600 - drawnWidth) / 2;
+  const offsetY = (420 - drawnHeight) / 2;
+  const project = (longitude, latitude) => [
+    offsetX + (longitude - bounds.minLongitude) * scale,
+    offsetY + (bounds.maxLatitude - latitude) * scale,
+  ];
+  elements["county-map-path"].setAttribute("d", geometryPath(county, project));
+  elements["alert-map-path"].setAttribute("d", geometryPath(polygon, project));
+  if (county) elements["alert-map-path"].setAttribute("clip-path", "url(#county-clip)");
+  else elements["alert-map-path"].removeAttribute("clip-path");
+  elements["alert-map-path"].classList.toggle("watch", alertLevel(event) !== "warning");
+  return true;
+}
+
+async function renderAlertMap(state, alert) {
+  const renderId = ++mapRenderId;
+  const sourceAlert = selectedAlertGeometry(state);
+  const polygon = sourceAlert?.geometry || alert?.geometry || null;
+  const code = state?.activeCounty?.code || alert?.countyCode || state?.activeIncident?.countyCode || "";
+  const countyName = state?.activeCounty?.name || alert?.countyName || state?.activeIncident?.countyName || "County";
+  const event = alert?.event || state?.selectedEvent || "Waiting for shared alert";
+  elements["map-alert-title"].textContent = `${countyName} · ${event}`;
+  elements["map-alert-status"].textContent = polygon ? "Active polygon" : "County view";
+  elements["map-alert-status"].classList.toggle("active", Boolean(polygon));
+  try {
+    const county = await countyGeometry(code);
+    if (renderId !== mapRenderId) return;
+    drawAlertMap(county, polygon, event);
+    elements["map-description"].textContent = polygon
+      ? `${alert?.area || alert?.headline || event} · Shaded polygon clipped to ${countyName}.`
+      : `${countyName} boundary · No selected alert polygon.`;
+  } catch {
+    if (renderId !== mapRenderId) return;
+    drawAlertMap(null, polygon, event);
+    elements["map-description"].textContent = polygon
+      ? `${alert?.area || alert?.headline || event} · County boundary unavailable.`
+      : "County and alert polygon data are unavailable.";
+  }
 }
 
 function allLogs(incident) {
@@ -231,7 +330,7 @@ function renderCalendar(calendarEvents) {
   if (!calendarEvents.length) {
     const empty = document.createElement("p");
     empty.className = "calendar-empty";
-    empty.textContent = "No approved events in the previous or next 24 hours.";
+    empty.textContent = "No approved events in the last 6 or next 24 hours.";
     container.append(empty);
     return;
   }
@@ -260,7 +359,7 @@ function renderCalendar(calendarEvents) {
     const count = document.createElement("strong");
     count.textContent = `+${sorted.length - visibleEvents.length} more`;
     const label = document.createElement("span");
-    label.textContent = "in this 48-hour window";
+    label.textContent = "in this 30-hour window";
     more.append(count, label);
     container.append(more);
   }
@@ -268,8 +367,8 @@ function renderCalendar(calendarEvents) {
 
 async function pollCalendar() {
   const now = new Date();
-  const from = new Date(now.getTime() - CALENDAR_WINDOW_MS);
-  const to = new Date(now.getTime() + CALENDAR_WINDOW_MS);
+  const from = new Date(now.getTime() - CALENDAR_PAST_WINDOW_MS);
+  const to = new Date(now.getTime() + CALENDAR_FUTURE_WINDOW_MS);
   elements["calendar-window-label"].textContent = `${formatCalendarTime(from)} – ${formatCalendarTime(to)}`;
   try {
     const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
@@ -297,9 +396,9 @@ function renderState(state) {
   elements["alert-expires"].textContent = formatDateTime(alert?.expires || alert?.ends);
   elements["incident-status"].textContent = incident ? (incident.closedAt ? "Closed" : "Open") : "--";
   elements["operator-name"].textContent = incident?.operator || "--";
-  elements["radio-message"].textContent = messageFor(state, alert);
   elements["incident-notes"].textContent = incident?.notes || "No notes recorded.";
   document.querySelector(".alert-band").classList.toggle("warning", alertLevel(event) === "warning");
+  renderAlertMap(state, alert);
   renderLogs(incident);
   renderSirens(incident);
   renderSpotter(incident);

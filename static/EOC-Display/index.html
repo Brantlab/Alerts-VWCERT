@@ -43,25 +43,23 @@
       </div>
     </section>
 
-    <section class="calendar-strip" aria-labelledby="calendar-heading">
-      <div class="calendar-strip-heading">
-        <p class="eyebrow">Approved Events</p>
-        <h3 id="calendar-heading">24-Hour Calendar</h3>
-        <p id="calendar-window-label" class="calendar-window">Previous 24 hours · Next 24 hours</p>
-        <span id="calendar-status" class="calendar-status checking">Checking</span>
-      </div>
-      <div id="calendar-events" class="calendar-events" aria-live="polite">
-        <p class="calendar-empty">Loading calendar events…</p>
-      </div>
-    </section>
-
     <section class="eoc-grid">
-      <article class="panel radio-panel">
+      <article class="panel alert-map-panel">
         <div class="panel-heading">
-          <p class="eyebrow">Prepared Broadcast</p>
-          <h3>Radio Message</h3>
+          <div>
+            <p class="eyebrow">County Alert</p>
+            <h3 id="map-alert-title">Waiting for shared alert</h3>
+          </div>
+          <span id="map-alert-status" class="map-alert-status">Waiting</span>
         </div>
-        <p id="radio-message" class="radio-message">No radio message selected.</p>
+        <div class="alert-map" role="img" aria-labelledby="map-alert-title" aria-describedby="map-description">
+          <svg id="alert-map-svg" viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <defs><clipPath id="county-clip"><use href="#county-map-path"></use></clipPath></defs>
+            <path id="county-map-path" class="county-map-path" fill-rule="evenodd"></path>
+            <path id="alert-map-path" class="alert-map-path" fill-rule="evenodd" clip-path="url(#county-clip)"></path>
+          </svg>
+          <p id="map-description" class="map-description">Waiting for county and alert polygon data.</p>
+        </div>
       </article>
 
       <article class="panel logs-panel">
@@ -114,6 +112,20 @@
         <div class="connected">
           <strong>Connected</strong>
           <span id="connected-clients">--</span>
+        </div>
+      </article>
+
+      <article class="panel calendar-panel" aria-labelledby="calendar-heading">
+        <div class="panel-heading calendar-panel-heading">
+          <div>
+            <p class="eyebrow">Approved Events</p>
+            <h3 id="calendar-heading">6 Hours Back · 24 Ahead</h3>
+          </div>
+          <span id="calendar-status" class="calendar-status checking">Checking</span>
+        </div>
+        <p id="calendar-window-label" class="calendar-window">Last 6 hours · Next 24 hours</p>
+        <div id="calendar-events" class="calendar-events" aria-live="polite">
+          <p class="calendar-empty">Loading calendar events…</p>
         </div>
       </article>
     </section>

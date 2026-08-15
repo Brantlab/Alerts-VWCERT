@@ -32,7 +32,7 @@ The read-only EOC wall display is available at:
 /EOC-Display/
 ```
 
-It is designed for a 1920x1080 display and listens to the backend shared-state stream. It shows the selected county/alert, radio message, a compact approved-event calendar covering the previous and next 24 hours, latest activity logs, tornado siren status, spotter activation and unit check-ins, office staffing, incident notes, backend status, and connected clients. The page identifies itself to presence as `EOC Display`.
+It is designed for a 1920x1080 display and listens to the backend shared-state stream. It shows the selected county alert and its polygon clipped over the county boundary, a compact approved-event calendar covering the last 6 hours and next 24 hours, latest activity logs, tornado siren status, spotter activation and unit check-ins, office staffing, incident notes, backend status, and connected clients. The page identifies itself to presence as `EOC Display`.
 
 The alert desk header includes a Links menu for calendar approval, Nixle, both EOC displays, the public calendar, spotter check-in, NWS Wilmington, and the Storm Prediction Center.
 
